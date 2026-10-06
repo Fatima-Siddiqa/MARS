@@ -1,0 +1,17 @@
+# Replace the placeholders with real GitHub usernames.
+# Fatima = @FATIMA_GH, Aneeqa = @ANEEQA_GH, Mariam = @MARIAM_GH
+
+*                                         @MARIAM_GH @ANEEQA_GH @FATIMA_GH
+/backend/app/schemas/                     @MARIAM_GH @ANEEQA_GH @FATIMA_GH
+/backend/app/agents/technical/            @FATIMA_GH
+/backend/app/agents/fx/                   @FATIMA_GH
+/backend/app/agents/sentiment/            @ANEEQA_GH
+/backend/app/agents/fundamentals/         @ANEEQA_GH
+/backend/app/agents/macro/                @MARIAM_GH
+/backend/app/agents/forensics/            @MARIAM_GH
+/backend/app/synthesis/                   @FATIMA_GH @ANEEQA_GH
+/backend/app/orchestration/               @MARIAM_GH
+/frontend/                                @ANEEQA_GH
+/docker-compose.yml                       @MARIAM_GH
+/infra/                                   @MARIAM_GH
+/.github/                                 @MARIAM_GH
