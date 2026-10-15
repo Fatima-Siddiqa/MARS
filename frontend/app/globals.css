@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-sans-app), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-app), ui-monospace, SFMono-Regular, monospace;
+}
+
+body {
+  background: #f8fafc;
+  color: #0f172a;
+  font-family: var(--font-sans-app), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Visible keyboard focus for buttons, links and inputs */
+:where(button, a, input, select):focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
