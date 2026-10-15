@@ -19,3 +19,8 @@ def test_recommendation_degrades_gracefully_with_stub_agents():
     assert body["call"] == "HOLD"
     assert len(body["agent_outputs"]) == 6
     assert all(a["status"] == "unavailable" for a in body["agent_outputs"])
+
+
+def test_technical_endpoint_never_crashes():
+    r = client.get("/agents/technical/HBL?as_of=2026-07-14")
+    assert r.status_code == 200 and r.json()["agent"] == "technical"
