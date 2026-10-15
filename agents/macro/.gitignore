@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+data/*.db
+data/lockbox_run.json
+data/drop/*.csv
+reports/
+.env
+.venv/
+*.egg-info/

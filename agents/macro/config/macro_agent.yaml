@@ -1,0 +1,225 @@
+# MARS Macro Agent - pinned configuration.
+# Every default in the methodology lives here so a run is reproducible; a hash of
+# this file is embedded in model_version. Values marked [CALIBRATE] are starting
+# points; items marked [TO CONFIRM] depend on data checks still in progress.
+version: "0.1.0"
+horizon_days: 20
+database_url: "sqlite:///data/macro.db"      # use postgresql+psycopg://user:pw@host/db in production
+timezone: "Asia/Karachi"
+
+standardise:
+  min_months: 36            # [CALIBRATE] history needed for the robust z-score
+  clip: 3.0
+  mad_scale: 1.4826
+  fallback_min_obs: 12      # min month-end observations for percentile fallback
+  percentile_min_obs: 5     # min distinct releases for percentile-method (annual) features
+  low_weight: 0.5           # weight given to features scored by a fallback method
+
+state:
+  bullish: 0.20             # [CALIBRATE] aligned with the Technical agent
+  bearish: -0.20
+
+quality:
+  agreement_negligible: 0.05      # |pillar| below this is ignored in the agreement share
+  low_confidence_cap: 0.20        # confidence ceiling when a gate fires
+  min_pillars: 3
+  freshness_levels: {fresh: 1.0, aging: 0.5, stale: 0.2}   # [CALIBRATE]
+  critical_groups:                # a gate fires if every feature in a group is unavailable
+    policy_rate: [rate_change_6m, rate_vs_12m_avg]
+    pkr_usd: [pkr_dep_30d, pkr_dep_90d, pkr_vol_30d]
+    cpi: [cpi_level, cpi_trend]
+
+regime_flags:                     # raised for the Regime layer; the agent never labels regimes
+  z_threshold: 2.0                # [CALIBRATE]
+  flags:
+    rate_cycle: rate_change_6m
+    inflation_shock: cpi_level
+    rupee_stress: pkr_dep_30d
+    oil_shock: brent_3m
+
+pillars: [monetary, inflation, external, commodity, growth]
+pillar_weights: {}                # empty = equal weights (default). Learned weights only if they beat this OOS.
+
+# Release lags are [TO CONFIRM] for everything except daily market series.
+# obs_date convention: daily = the day; monthly = month end; annual = fiscal year end (30 Jun).
+series:
+  policy_rate:
+    source: sbp_easydata
+    unit: percent
+    frequency: decision
+    release_lag_days: 0
+    expected_interval_days: 90      # a hold of ~3 months is normal; step function
+    tolerance_days: 45
+    use_from: "2015-05-25"          # policy-rate definition changed in 2009 and 2015
+    plausible: [0, 40]
+    source_url: "https://easydata.sbp.org.pk/"
+    file: "data/drop/policy_rate.csv"
+  tbill_3m:
+    source: sbp_easydata
+    unit: percent
+    frequency: weekly
+    release_lag_days: 1
+    expected_interval_days: 7
+    tolerance_days: 7
+    plausible: [0, 40]
+    source_url: "https://easydata.sbp.org.pk/"
+    file: "data/drop/tbill_3m.csv"
+  cpi_yoy:
+    source: pbs
+    unit: percent
+    frequency: monthly
+    release_lag_days: 3             # [TO CONFIRM] PBS releases in the first days of the next month
+    expected_interval_days: 31
+    tolerance_days: 10
+    plausible: [-5, 50]
+    breaks: ["2016-07-01"]          # CPI base year 2007-08 -> 2015-16 (flag only)
+    source_url: "https://www.pbs.gov.pk/"
+    file: "data/drop/cpi_yoy.csv"
+  pkr_usd:
+    source: sbp_easydata
+    unit: PKR per USD
+    frequency: daily
+    release_lag_days: 1
+    expected_interval_days: 1
+    tolerance_days: 4               # weekends and holidays
+    plausible: [50, 600]
+    source_url: "https://easydata.sbp.org.pk/"
+    file: "data/drop/pkr_usd.csv"
+  fx_reserves:
+    source: sbp_easydata
+    unit: USD million
+    frequency: weekly
+    release_lag_days: 7             # [TO CONFIRM]
+    expected_interval_days: 7
+    tolerance_days: 10
+    plausible: [0, 100000]
+    source_url: "https://easydata.sbp.org.pk/"
+    file: "data/drop/fx_reserves.csv"
+  current_account:
+    source: sbp_easydata
+    unit: USD million
+    frequency: monthly
+    release_lag_days: 20            # [TO CONFIRM]
+    expected_interval_days: 31
+    tolerance_days: 15
+    plausible: [-10000, 10000]
+    source_url: "https://easydata.sbp.org.pk/"
+    file: "data/drop/current_account.csv"
+  remittances:
+    source: sbp_easydata
+    unit: USD million
+    frequency: monthly
+    release_lag_days: 10            # [TO CONFIRM]
+    expected_interval_days: 31
+    tolerance_days: 15
+    plausible: [0, 10000]
+    source_url: "https://easydata.sbp.org.pk/"
+    file: "data/drop/remittances.csv"
+  brent:
+    source: fred
+    fred_id: DCOILBRENTEU
+    unit: USD per barrel
+    frequency: daily
+    release_lag_days: 3             # EIA series trail by a few days [TO CONFIRM]
+    expected_interval_days: 1
+    tolerance_days: 7
+    plausible: [-50, 250]
+    source_url: "https://fred.stlouisfed.org/series/DCOILBRENTEU"
+    file: "data/drop/brent.csv"          # offline fallback
+  gold:
+    source: csv_file                # World Bank Pink Sheet (monthly) or Yahoo GC=F (daily backup)
+    unit: USD per troy oz
+    frequency: daily
+    release_lag_days: 1
+    expected_interval_days: 1
+    tolerance_days: 7
+    plausible: [100, 10000]
+    source_url: "https://www.worldbank.org/en/research/commodity-markets"
+    file: "data/drop/gold.csv"
+  gdp_growth:
+    source: worldbank
+    wb_indicator: NY.GDP.MKTP.KD.ZG
+    wb_country: PAK
+    unit: percent
+    frequency: annual
+    release_lag_days: 300           # [TO CONFIRM] conservative: obs 30 Jun Y, usable from ~Apr Y+1
+    expected_interval_days: 365
+    tolerance_days: 120
+    plausible: [-15, 20]
+    source_url: "https://data.worldbank.org/indicator/NY.GDP.MKTP.KD.ZG?locations=PK"
+    file: "data/drop/gdp_growth.csv"     # offline fallback
+  kse100:
+    source: psx
+    unit: index points
+    frequency: daily
+    release_lag_days: 0
+    expected_interval_days: 1
+    tolerance_days: 4
+    plausible: [100, 500000]
+    source_url: "https://dps.psx.com.pk/"
+    file: "data/drop/kse100.csv"
+
+# orient: +1 = higher is bullish, -1 = higher is bearish. enabled=false => computed but not scored.
+features:
+  rate_change_6m:   {pillar: monetary,  orient: -1, series: [policy_rate],             unit: pp,       label: "the 6-month change in the policy rate"}
+  rate_vs_12m_avg:  {pillar: monetary,  orient: -1, series: [policy_rate],             unit: pp,       label: "the policy rate versus its 12-month average"}
+  yield_spread:     {pillar: monetary,  orient: -1, series: [tbill_3m, policy_rate],   unit: pp,       label: "the 3-month T-bill yield minus the policy rate"}   # [TO CONFIRM] sign
+  cpi_level:        {pillar: inflation, orient: -1, series: [cpi_yoy],                 unit: percent,  label: "the inflation rate"}
+  cpi_trend:        {pillar: inflation, orient: -1, series: [cpi_yoy],                 unit: pp,       label: "the recent trend in inflation"}
+  pkr_dep_30d:      {pillar: external,  orient: -1, series: [pkr_usd],                 unit: percent,  label: "the rupee's 30-day depreciation"}
+  pkr_dep_90d:      {pillar: external,  orient: -1, series: [pkr_usd],                 unit: percent,  label: "the rupee's 90-day depreciation"}
+  pkr_vol_30d:      {pillar: external,  orient: -1, series: [pkr_usd],                 unit: percent,  label: "the rupee's 30-day volatility"}
+  reserves_chg_3m:  {pillar: external,  orient: +1, series: [fx_reserves],             unit: percent,  label: "the 3-month change in FX reserves"}
+  ca_3m_sum:        {pillar: external,  orient: +1, series: [current_account],         unit: USD million, label: "the 3-month current-account balance"}
+  remittances_yoy:  {pillar: external,  orient: +1, series: [remittances],             unit: percent,  label: "remittance growth"}
+  brent_3m:         {pillar: commodity, orient: -1, series: [brent],                   unit: percent,  label: "the 3-month change in oil prices"}
+  brent_pct_252:    {pillar: commodity, orient: -1, series: [brent],                   unit: percentile, label: "where oil prices sit versus the past year"}
+  gold_3m:          {pillar: commodity, orient: -1, series: [gold],                    unit: percent,  label: "the 3-month change in gold", enabled: false}   # direction untested
+  gdp_growth:       {pillar: growth,    orient: +1, series: [gdp_growth],              unit: percent,  label: "economic growth", method: percentile, weight: 0.5,
+                     fixed_rule: {neutral: 4.0, scale: 4.0}}   # [CALIBRATE] used only if < 5 annual observations
+
+feature_params:
+  brent_percentile_window: 252      # observations (daily series)
+  monthly_obs_per_year: 12
+
+# ticker -> sector, and sector -> {feature: multiplier}. Hypotheses to TEST, not findings.
+tickers:
+  OGDC: oil_gas_producer
+  PPL: oil_gas_producer
+  MARI: oil_gas_producer
+  POL: oil_gas_producer
+  PSO: oil_marketing
+  HUBC: power
+  LUCK: cement
+  HBL: banks
+  UBL: banks
+  MCB: banks
+  ENGRO: fertilizer
+  FFC: fertilizer
+  NML: textile_export
+  GATM: textile_export
+  ILP: textile_export
+sectors:
+  oil_gas_producer:
+    brent_3m: -1.0                  # oil effect reversed for producers
+    brent_pct_252: -1.0
+  textile_export:
+    pkr_dep_30d: 0.5                # rupee weakness effect reduced for exporters
+    pkr_dep_90d: 0.5
+
+llm:
+  enabled: false
+  url: "http://localhost:11434/api/generate"
+  model: "llama3.1:8b"
+  timeout_s: 30
+
+evaluation:
+  label_horizon: 20
+  initial_train_days: 1260          # ~5y of trading days before first test fold
+  test_window_days: 252
+  purge_days: 20
+  lockbox_start: "2025-07-01"       # [TO AGREE] period to be agreed with the team
+  select_margin: 0.02               # fitted weights must beat rules by this rank-corr margin OOS
+  ridge_alpha: 10.0
+  regime_thresholds: {rate_hike_pp: 1.0, pkr_shock_pct: 5.0, oil_shock_pct: 20.0}
+  confidence_bins: 5
