@@ -66,7 +66,7 @@ export default function AgentDetailModal({ agent, data, onClose }: Props) {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Confidence</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{data.agent === "sentiment" ? "Data quality" : "Confidence"}</div>
               <div className="text-xl font-bold">{pct(data.confidence)}</div>
             </div>
           </div>
