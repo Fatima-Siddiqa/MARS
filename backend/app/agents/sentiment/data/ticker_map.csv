@@ -1,0 +1,11 @@
+ticker,company,stock_file,note
+ENGROH,Engro Holdings,ENGROH.xlsx,
+HBL,HBL,HBL.xlsx,
+HUBC,Hub Power,HUBC.xlsx,
+LUCKY,Lucky Cement,Lucky Cement.xlsx,prices stop 2026-05-29 in the dataset; refresh
+OGDCL,OGDC,OGDC.xlsx,
+PPL,PPL,PPL.xlsx,
+PTCL,PTCL,PTCL.xlsx,
+SEARL,Searle,SERL.xlsx,
+SYSTEMS,Systems Ltd,Systems Limited.xlsx,prices stop 2026-05-29 in the dataset; refresh
+UBL,UBL,UBL.xlsx,

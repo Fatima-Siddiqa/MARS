@@ -1,9 +1,9 @@
 import { mockOutput } from "@/data/mock";
 import { adaptTechnical, type BackendTechnical } from "./technical-adapter";
-import type { AgentId, AgentOutput } from "./types";
+import type { AgentId, AgentOutput, Indicator, Signal } from "./types";
 
-// NEXT_PUBLIC_ variables are baked in at BUILD time (matters for Docker).
-const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== "false";
+const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
+const LIVE_SENTIMENT = process.env.NEXT_PUBLIC_LIVE_SENTIMENT !== "false";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const sleep = (ms: number, signal?: AbortSignal) =>
@@ -12,7 +12,7 @@ const sleep = (ms: number, signal?: AbortSignal) =>
     signal?.addEventListener("abort", () => {
       clearTimeout(id);
       reject(new DOMException("Aborted", "AbortError"));
-    });
+    }, { once: true });
   });
 
 // The technical agent is wired to the real backend. Set NEXT_PUBLIC_USE_MOCK_TECHNICAL=true to mock it.
@@ -31,18 +31,85 @@ async function fetchTechnical(ticker: string, signal?: AbortSignal): Promise<Age
   return adaptTechnical(body);
 }
 
-export async function fetchAgent(agent: AgentId, ticker: string, signal?: AbortSignal): Promise<AgentOutput> {
-  if (agent === "technical" && !TECH_MOCK) return fetchTechnical(ticker, signal);
+type BackendEvidence = {
+  claim: string;
+  source_name: string;
+  source_url?: string | null;
+  source_type?: string | null;
+  excerpt?: string | null;
+};
 
-  if (USE_MOCK) {
-    await sleep(800 + Math.random() * 1400, signal); // different delays so cards load independently
+type BackendAgentOutput = {
+  agent: string;
+  ticker: string;
+  as_of: string;
+  status: "ok" | "degraded" | "unavailable" | "error";
+  stance: Signal;
+  score: number;
+  confidence: number;
+  summary?: string;
+  key_findings?: string[];
+  risks?: string[];
+  evidence?: BackendEvidence[];
+  metrics?: Record<string, unknown>;
+  warnings?: string[];
+};
+
+function toIndicators(raw: BackendAgentOutput): Indicator[] {
+  const m = raw.metrics ?? {};
+  const items: Array<[string, unknown]> = [
+    ["Score", raw.score.toFixed(4)],
+    ["Data quality", `${Math.round(raw.confidence * 100)}%`],
+    ["Articles in window", m.articles_in_window],
+    ["Effective articles", m.effective_articles],
+    ["Window", typeof m.window_days === "number" ? `${m.window_days} days` : undefined],
+    ["Model", m.model_version],
+    ["Parent", m.parent],
+  ];
+  return items
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([label, value]) => ({ label, value: String(value) }));
+}
+
+function adaptSentiment(raw: BackendAgentOutput): AgentOutput {
+  if (raw.status !== "ok" && raw.status !== "degraded") {
+    throw new Error((raw.warnings ?? []).join("; ") || `Sentiment agent status: ${raw.status}`);
+  }
+  return {
+    agent: "sentiment",
+    ticker: raw.ticker,
+    signal: raw.stance,
+    score: raw.score,
+    // For sentiment, this shared UI field carries the MARS quality index, not
+    // a calibrated probability. The UI labels it "Data quality" for this agent.
+    confidence: raw.confidence,
+    summary: raw.summary ?? "No sentiment summary returned.",
+    rationale: (raw.key_findings ?? []).join(" ") || raw.summary || "No additional rationale returned.",
+    indicators: toIndicators(raw),
+    evidence: (raw.evidence ?? []).map((ev) => ({
+      title: ev.claim,
+      source: ev.source_name,
+      ...(ev.source_url ? { url: ev.source_url } : {}),
+    })),
+    generated_at: raw.as_of,
+  };
+}
+
+export async function fetchAgent(agent: AgentId, ticker: string, signal?: AbortSignal): Promise<AgentOutput> {
+  // The technical agent is wired to the real backend.
+  if (agent === "technical" && !TECH_MOCK) return fetchTechnical(ticker, signal);
+  // The sentiment agent is live; other specialist agents remain on demo data until implemented.
+  if (USE_MOCK || agent !== "sentiment" || !LIVE_SENTIMENT) {
+    await sleep(800 + Math.random() * 1400, signal);
     // Demo of the error state. Delete this line when real wiring starts.
     if (agent === "macro" && ticker === "SEARL") throw new Error("Macro agent timed out (mock error)");
     return mockOutput(agent, ticker);
   }
 
-  // Confirm the exact URL/params with Fatima's FastAPI skeleton.
-  const res = await fetch(`${API_BASE}/agents/${agent}?ticker=${encodeURIComponent(ticker)}`, { signal });
-  if (!res.ok) throw new Error(`Request failed (${res.status})`);
-  return (await res.json()) as AgentOutput;
+  const res = await fetch(`${API_BASE}/agents/sentiment/${encodeURIComponent(ticker)}`, { signal });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Sentiment API request failed (${res.status})${detail ? `: ${detail}` : ""}`);
+  }
+  return adaptSentiment((await res.json()) as BackendAgentOutput);
 }

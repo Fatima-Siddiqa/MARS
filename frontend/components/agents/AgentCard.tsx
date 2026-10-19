@@ -106,7 +106,7 @@ export default function AgentCard({ agent, state, onRetry, onOpen }: Props) {
 
         <div className="mt-4 border-t border-slate-100 pt-4">
           <div className="mb-1.5 flex justify-between text-xs">
-            <span className="text-slate-500">Confidence</span>
+            <span className="text-slate-500">{data?.agent === "sentiment" ? "Data quality" : "Confidence"}</span>
             {state.status === "loading" ? (
               <span className={`${skeleton} h-3 w-8`} />
             ) : (
