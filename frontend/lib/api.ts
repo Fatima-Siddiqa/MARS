@@ -1,4 +1,5 @@
 import { mockOutput } from "@/data/mock";
+import { adaptTechnical, type BackendTechnical } from "./technical-adapter";
 import type { AgentId, AgentOutput, Indicator, Signal } from "./types";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
@@ -13,6 +14,22 @@ const sleep = (ms: number, signal?: AbortSignal) =>
       reject(new DOMException("Aborted", "AbortError"));
     }, { once: true });
   });
+
+// The technical agent is wired to the real backend. Set NEXT_PUBLIC_USE_MOCK_TECHNICAL=true to mock it.
+const TECH_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_TECHNICAL === "true";
+// Raw price files end in mid-2026; set e.g. 2026-07-14 to analyse as of a past date (optional).
+const TECH_AS_OF = process.env.NEXT_PUBLIC_TECH_AS_OF;
+
+async function fetchTechnical(ticker: string, signal?: AbortSignal): Promise<AgentOutput> {
+  const q = TECH_AS_OF ? `?as_of=${encodeURIComponent(TECH_AS_OF)}` : "";
+  const res = await fetch(`${API_BASE}/agents/technical/${encodeURIComponent(ticker)}${q}`, { signal });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  const body = (await res.json()) as BackendTechnical;
+  if (body.status === "unavailable" || body.status === "error") {
+    throw new Error(body.warnings?.[0] ?? `Technical agent ${body.status}`);
+  }
+  return adaptTechnical(body);
+}
 
 type BackendEvidence = {
   claim: string;
@@ -79,9 +96,12 @@ function adaptSentiment(raw: BackendAgentOutput): AgentOutput {
 }
 
 export async function fetchAgent(agent: AgentId, ticker: string, signal?: AbortSignal): Promise<AgentOutput> {
+  // The technical agent is wired to the real backend.
+  if (agent === "technical" && !TECH_MOCK) return fetchTechnical(ticker, signal);
   // The sentiment agent is live; other specialist agents remain on demo data until implemented.
   if (USE_MOCK || agent !== "sentiment" || !LIVE_SENTIMENT) {
     await sleep(800 + Math.random() * 1400, signal);
+    // Demo of the error state. Delete this line when real wiring starts.
     if (agent === "macro" && ticker === "SEARL") throw new Error("Macro agent timed out (mock error)");
     return mockOutput(agent, ticker);
   }

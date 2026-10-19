@@ -35,6 +35,12 @@ def data_dir(tmp_path, monkeypatch):
     return tmp_path
 
 
+def test_frontend_symbols_resolve_to_files(data_dir, monkeypatch):
+    monkeypatch.setattr(prices, "FILE_ALIASES", {**prices.FILE_ALIASES, "LUCKY": "TEST"})
+    assert prices.price_path("LUCKY") == data_dir / "TEST.csv"
+    assert {"LUCKY", "SYSTEMS", "OGDCL"} <= set(prices.FILE_ALIASES)
+
+
 def test_clean_handles_dashes_and_adjusts():
     c = clean_prices(_raw(dash_rows=(300,)))
     assert c.index.is_monotonic_increasing

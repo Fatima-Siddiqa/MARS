@@ -18,6 +18,21 @@ export type Evidence = {
 /** One tracked metric, shown as a small tile in the detail popup. */
 export type Indicator = { label: string; value: string };
 
+/** One trading day for the price charts (technical agent only). */
+export type ChartPoint = {
+  time: string; // "YYYY-MM-DD"
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  volume: number;
+  sma20: number | null;
+  sma50: number | null;
+  sma200: number | null;
+  rsi14: number | null;
+  macd_hist: number | null;
+};
+
 export type AgentOutput = {
   agent: AgentId;
   ticker: string;
@@ -35,6 +50,14 @@ export type AgentOutput = {
   /** "Audited evidence" in the detail popup. */
   evidence: Evidence[];
   generated_at?: string;
+  /** Technical agent: last trading day analysed (ISO date). */
+  as_of?: string;
+  /** Technical agent: 250-day series for the charts. */
+  chart?: ChartPoint[];
+  /** Technical agent: family scores (-1..+1), e.g. trend, momentum. */
+  families?: Record<string, number | null>;
+  risks?: string[];
+  warnings?: string[];
 };
 
 export type AgentState =
