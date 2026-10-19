@@ -1,0 +1,11 @@
+ticker,psx_symbol,company_name,aliases,sector,require_context,context_terms
+ENGROH,ENGROH,Engro Holdings Limited,Engro Holdings|Engro Corporation,conglomerate,0,
+HBL,HBL,Habib Bank Limited,Habib Bank|HBL,banks,1,
+HUBC,HUBC,Hub Power Company Limited,Hub Power Company|Hub Power|Hubco,power,1,
+LUCKY,LUCK,Lucky Cement Limited,Lucky Cement,cement,0,
+OGDCL,OGDC,Oil and Gas Development Company Limited,Oil and Gas Development Company|OGDCL|OGDC,oil_gas,0,
+PPL,PPL,Pakistan Petroleum Limited,Pakistan Petroleum,oil_gas,0,
+PTCL,PTC,Pakistan Telecommunication Company Limited,Pakistan Telecommunication Company|PTCL,telecom,0,
+SEARL,SEARL,The Searle Company Limited,Searle Company|Searle Pakistan,pharma,0,
+SYSTEMS,SYS,Systems Limited,Systems Ltd,technology,1,Temenos|UiPath|GCC|MEA|Middle East
+UBL,UBL,United Bank Limited,United Bank Limited|UBL,banks,1,

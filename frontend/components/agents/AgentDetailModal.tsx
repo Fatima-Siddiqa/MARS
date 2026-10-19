@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { Activity, CheckCircle2, ExternalLink, Layers, ListChecks, X } from "lucide-react";
+import Link from "next/link";
+import { Activity, CheckCircle2, ChartCandlestick, ExternalLink, Layers, ListChecks, X } from "lucide-react";
 import type { AgentConfig } from "@/data/agents";
 import { SIGNAL_BADGE, SIGNAL_LABEL, pct } from "@/lib/format";
 import type { AgentOutput } from "@/lib/types";
@@ -66,7 +67,7 @@ export default function AgentDetailModal({ agent, data, onClose }: Props) {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Confidence</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{data.agent === "sentiment" ? "Data quality" : "Confidence"}</div>
               <div className="text-xl font-bold">{pct(data.confidence)}</div>
             </div>
           </div>
@@ -119,7 +120,12 @@ export default function AgentDetailModal({ agent, data, onClose }: Props) {
           </Section>
         </div>
 
-        <div className="flex justify-end border-t border-slate-100 p-4">
+        <div className="flex items-center justify-end gap-3 border-t border-slate-100 p-4">
+          {data.chart && data.chart.length > 0 && (
+            <Link href="/company" onClick={onClose} className="mr-auto flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
+              <ChartCandlestick className="h-4 w-4" /> View price charts
+            </Link>
+          )}
           <button onClick={onClose} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
             Close Details
           </button>
