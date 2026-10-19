@@ -1,6 +1,5 @@
 import { mockOutput } from "@/data/mock";
-import { adaptTechnical, type BackendTechnical } from "./technical-adapter";
-import type { AgentId, AgentOutput, Indicator, Signal } from "./types";
+import type { AgentId, AgentOutput } from "./types";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
 const LIVE_SENTIMENT = process.env.NEXT_PUBLIC_LIVE_SENTIMENT !== "false";
@@ -95,6 +94,52 @@ function adaptSentiment(raw: BackendAgentOutput): AgentOutput {
   };
 }
 
+// Shape the backend actually returns (the team's agent contract).
+type BackendOutput = {
+  agent: AgentId;
+  ticker: string;
+  as_of?: string;
+  status?: "ok" | "degraded" | "unavailable";
+  stance: Signal;
+  score: number;
+  confidence: number;
+  summary?: string;
+  key_findings?: string[];
+  risks?: string[];
+  evidence?: {
+    claim: string;
+    source_name?: string;
+    source_url?: string;
+    retrieved_at?: string;
+  }[];
+  metrics?: { indicators?: { label: string; value: string }[] };
+  warnings?: string[];
+};
+
+function toAgentOutput(raw: BackendOutput): AgentOutput {
+  const rationale = [
+    ...(raw.key_findings ?? []),
+    ...(raw.risks ?? []).map((r) => `Risk: ${r}`),
+  ].join("\n");
+  return {
+    agent: raw.agent,
+    ticker: raw.ticker,
+    signal: raw.stance,
+    score: raw.score,
+    confidence: raw.confidence,
+    summary: raw.summary,
+    rationale: rationale || undefined,
+    indicators: raw.metrics?.indicators,
+    evidence: (raw.evidence ?? []).map((e) => ({
+      title: e.claim,
+      url: e.source_url,
+      source: e.source_name,
+      date: e.retrieved_at?.slice(0, 10),
+    })),
+    generated_at: raw.as_of,
+  };
+}
+
 export async function fetchAgent(agent: AgentId, ticker: string, signal?: AbortSignal): Promise<AgentOutput> {
   // The technical agent is wired to the real backend.
   if (agent === "technical" && !TECH_MOCK) return fetchTechnical(ticker, signal);
@@ -106,10 +151,8 @@ export async function fetchAgent(agent: AgentId, ticker: string, signal?: AbortS
     return mockOutput(agent, ticker);
   }
 
-  const res = await fetch(`${API_BASE}/agents/sentiment/${encodeURIComponent(ticker)}`, { signal });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Sentiment API request failed (${res.status})${detail ? `: ${detail}` : ""}`);
-  }
-  return adaptSentiment((await res.json()) as BackendAgentOutput);
+  // Confirm the exact URL/params with Fatima's FastAPI skeleton.
+  const res = await fetch(`${API_BASE}/agents/${agent}?ticker=${encodeURIComponent(ticker)}`, { signal });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return (await res.json()) as AgentOutput;
 }
