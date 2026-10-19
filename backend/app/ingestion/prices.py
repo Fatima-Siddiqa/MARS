@@ -22,6 +22,10 @@ FILE_ALIASES = {
     "SYS": "Systems Limited",
     "SEARL": "SERL",
     "ENGRO": "ENGROH",
+    # symbols used by the frontend ticker list (frontend/data/tickers.ts)
+    "LUCKY": "Lucky Cement",
+    "SYSTEMS": "Systems Limited",
+    "OGDCL": "OGDC",
 }
 UNIVERSE = ["HBL", "HUBC", "OGDC", "UBL", "PPL", "PTCL", "SEARL", "LUCK", "SYS", "ENGROH"]
 PRICE_SOURCE = "PSX historical prices (FYP dataset, Adj. Close)"
