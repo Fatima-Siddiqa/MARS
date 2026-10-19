@@ -12,16 +12,20 @@ from app.agents.sentiment.newsagent import config
 
 PK_CONTEXT = re.compile(
     r"\b(pakistan|pakistani|psx|kse[- ]?100|kse|karachi|lahore|islamabad|secp|sbp|"
-    r"state bank|rs\s?\d|pkr|rupee|ogra|nepra|fbr|propakistani|mettis|brecorder|dawn)\b", re.I)
+    r"state bank|rs\s?\d|pkr|rupee|ogra|nepra|fbr|propakistani|mettis|brecorder|dawn)\b",
+    re.I
+    )
 
 INDIA_CONTEXT = re.compile(
     r"(\bNSE\s?:|\bBSE\s?:|\u20b9|\bcrores?\b|\blakhs?\b|\bSEBI\b|\bSensex\b|\bNifty\b)", re.I)
 
 # A capitalised word right before the company name usually means it is a
 # different company ("Enghouse Systems Limited", "Tata Advanced Systems Limited").
-ALLOWED_PREFIX = {"the", "pakistan", "pakistans", "pakistani", "by", "of", "a", "an", "and", "with",
-                  "at", "for", "from", "to", "in", "on", "as", "says", "tips", "hbl", "insider"}
-
+ALLOWED_PREFIX = {
+    "the", "pakistan", "pakistans", "pakistani", "by", "of", "a", "an",
+    "and", "with", "at", "for", "from", "to", "in", "on", "as", "says",
+    "tips", "hbl", "insider",
+}
 
 def norm(text):
     text = unicodedata.normalize("NFKC", text or "").replace("\u2019", "'").replace("\u2018", "'")
@@ -37,7 +41,12 @@ def load_companies():
 @lru_cache(maxsize=1)
 def load_sectors():
     with open(config.SECTORS_CSV, newline="", encoding="utf-8-sig") as fh:
-        return {r["sector"]: [k.strip() for k in r["keywords"].split("|") if k.strip()] for r in csv.DictReader(fh)}
+        return {
+            r["sector"]: [
+                k.strip() for k in r["keywords"].split("|") if k.strip()
+            ]
+            for r in csv.DictReader(fh)
+        }
 
 
 @lru_cache(maxsize=1)
@@ -176,11 +185,25 @@ def link_entities(headline, summary="", body="", outlet_is_pk=False):
     for sector, kws in load_sectors().items():
         for kw in kws:
             if _find(text, kw):
-                out.append({"entity_type": "sector", "entity_id": sector, "relevance": 0.3, "matched_name": kw})
+                out.append(
+                    {
+                        "entity_type": "sector",
+                        "entity_id": sector,
+                        "relevance": 0.3,
+                        "matched_name": kw,
+                    }
+                )
                 break
     for kw in load_market_keywords():
         if _find(text, kw):
-            out.append({"entity_type": "market", "entity_id": "PSX", "relevance": 0.3, "matched_name": kw})
+            out.append(
+                {
+                    "entity_type": "market",
+                    "entity_id": "PSX",
+                    "relevance": 0.3,
+                    "matched_name": kw,
+                }
+            )
             break
     return out
 

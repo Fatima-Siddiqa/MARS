@@ -9,17 +9,17 @@ changes its HTML only parse_rows() needs updating. A CSV fallback exists:
 
 
 import json
-import re
-
-from app.agents.sentiment.newsagent.http import get, post
 import logging
-from datetime import date, datetime, timedelta, timezone
+import re
+from datetime import UTC, date, datetime, timedelta
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
 from app.agents.sentiment.newsagent import config
 from app.agents.sentiment.newsagent.entities import load_companies
+from app.agents.sentiment.newsagent.http import get, post
+
 # from app.agents.sentiment.newsagent.http import post
 from app.agents.sentiment.newsagent.utils import normalize_url
 
@@ -32,7 +32,7 @@ def _parse_dt(date_text, time_text=""):
             txt = f"{date_text} {time_text}".strip() if "%I" in fmt else date_text
             dt = datetime.strptime(txt, fmt)
             # PSX shows Pakistan time (UTC+5)
-            return (dt - timedelta(hours=5)).replace(tzinfo=timezone.utc).isoformat()
+            return (dt - timedelta(hours=5)).replace(tzinfo=UTC).isoformat()
         except ValueError:
             continue
     return None
@@ -48,7 +48,14 @@ def parse_rows(html, base=config.PSX_ANNOUNCEMENTS_URL):
             continue
         cells = [td.get_text(" ", strip=True) for td in tds]
         links = [urljoin(base, a["href"]) for a in tr.find_all("a", href=True)]
-        pdf = next((l for l in links if l.lower().endswith(".pdf") or "/download/" in l), None)
+        pdf = next(
+            (
+                link
+                for link in links
+                if link.lower().endswith(".pdf") or "/download/" in link
+            ),
+            None,
+        )
         date_txt, time_txt, symbol = cells[0], cells[1], cells[2].upper()
         title = cells[4] if len(cells) > 4 else cells[3]
         published = _parse_dt(date_txt, time_txt)

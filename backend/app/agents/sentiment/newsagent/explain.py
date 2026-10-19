@@ -8,37 +8,65 @@ import requests
 
 from app.agents.sentiment.newsagent import config
 
-NUM = re.compile(r"[-+]?\d+(?:\.\d+)?")
+NUM = re.compile(
+    r"[-+]?\d+(?:\\.\d+)?"
+)
 
 
 def _fmt_drivers(drivers):
-    names = {"net_tone": "overall news tone", "tone_change": "change in tone versus the last 90 days",
-             "negative_share": "share of negative news"}
+    names = {
+        "net_tone": "overall news tone",
+        "tone_change": "change in tone versus the last 90 days",
+        "negative_share": "share of negative news",
+    }
     parts = []
     for d in drivers:
-        parts.append(f"{names.get(d['name'], d['name'])} ({d['direction']}, z={d['z']:+.2f})")
+        parts.append(
+            f"{names.get(d['name'], d['name'])} "
+            f"({d['direction']}, z={d['z']:+.2f})"
+        )
     return "; ".join(parts)
 
 
 def template_explanation(out):
     ctx = out["context"]
     if "no_recent_news" in out["flags"] and not ctx.get("articles_in_window"):
-        return (f"No recent news was found for {out['ticker']} in the last {ctx['window_days']} days, "
-                f"so sentiment is {'neutral' if not ctx.get('parent') else 'taken from the ' + ctx['parent'] + ' level'} "
-                f"({out['score']:+.2f}) with quality {out['quality']:.2f}.")
-    text = (f"Sentiment for {out['ticker']} is {out['state']} (score {out['score']:+.2f}, "
-            f"quality {out['quality']:.2f}) based on {ctx['articles_in_window']} distinct news items "
-            f"from {len(ctx['outlets'])} outlets in the last {ctx['window_days']} days.")
+                return (
+            f"No recent news was found for {out['ticker']} in the last "
+            f"{ctx['window_days']} days, "
+            f"so sentiment is "
+            + (
+                "neutral"
+                if not ctx.get("parent")
+                else f"taken from the {ctx['parent']} level"
+            )
+            + f" ({out['score']:+.2f}) with quality {out['quality']:.2f}."
+        )
+    text = (
+        f"Sentiment for {out['ticker']} is {out['state']} "
+        f"(score {out['score']:+.2f}, "
+        f"quality {out['quality']:.2f}) based on "
+        f"{ctx['articles_in_window']} distinct news items "
+        f"from {len(ctx['outlets'])} outlets in the last "
+        f"{ctx['window_days']} days."
+    )
     if out["drivers"]:
         text += " Main drivers: " + _fmt_drivers(out["drivers"]) + "."
     if "insufficient_history" in out["flags"]:
-        text += " There is not yet enough history to standardise the tone, so the score stays near neutral."
+        text += " There is not yet enough history to standardise the "
+        "tone, so the score stays near neutral."
     elif any(f.startswith("shrunk_to_") for f in out["flags"]):
-        text += (f" There is little company-specific news, so the score leans toward the "
-                 f"{ctx['parent'] or 'neutral'} level.")
+        text += (
+            " There is little company-specific news, so the score leans toward the "
+            f"{ctx['parent'] or 'neutral'} level."
+        )
     if out["evidence"]:
         e = out["evidence"][0]
-        text += f" Most influential item: \"{e['title']}\" ({e['outlet'] or 'unknown outlet'}, {(e['published_at'] or '')[:10]})."
+        text += (
+            f" Most influential item: \"{e['title']}\" "
+            f"({e['outlet'] or 'unknown outlet'}, "
+            f"{(e['published_at'] or '')[:10]})."
+        )
     return text
 
 
@@ -71,12 +99,21 @@ def numbers_ok(text, out):
 def llm_rewrite(out, level="beginner", timeout=30):
     """Return a plain-language rewrite or None (unavailable / rejected)."""
     base = template_explanation(out)
-    prompt = (f"Rewrite the following for a {level} investor in at most 3 short sentences. "
-              "Do not add, change or round any number. Do not give buy or sell advice.\n\n" + base)
+    prompt = (
+        f"Rewrite the following for a {level} investor in at most 3 short sentences. "
+        "Do not add, change or round any number. Do not give buy or sell advice.\n\n"
+        + base
+    )
     try:
-        r = requests.post(f"{config.OLLAMA_URL}/api/generate",
-                          json={"model": config.OLLAMA_MODEL, "prompt": prompt, "stream": False},
-                          timeout=timeout)
+        r = requests.post(
+            f"{config.OLLAMA_URL}/api/generate",
+            json={
+                "model": config.OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False,
+            },
+            timeout=timeout,
+        )
         r.raise_for_status()
         text = r.json().get("response", "").strip()
     except Exception:

@@ -1,6 +1,6 @@
 import html
 import re
-from datetime import timezone
+from datetime import UTC
 from urllib.parse import urlsplit, urlunsplit
 
 from dateutil import parser as dateparser
@@ -15,8 +15,8 @@ def to_iso(value):
     except (ValueError, OverflowError):
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).isoformat()
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat()
 
 
 def clean_html(text):
@@ -28,4 +28,12 @@ def clean_html(text):
 def normalize_url(url):
     """Light normalisation for deduplication. Query strings are kept on purpose."""
     parts = urlsplit((url or "").strip())
-    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), parts.query, ""))
+    return urlunsplit(
+        (
+            parts.scheme.lower(),
+            parts.netloc.lower(),
+            parts.path.rstrip("/"),
+            parts.query,
+            "",
+        )
+    )

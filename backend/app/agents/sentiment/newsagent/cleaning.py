@@ -3,7 +3,7 @@ source credibility and timestamp precision."""
 import csv
 import hashlib
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.agents.sentiment.newsagent import config
 from app.agents.sentiment.newsagent.utils import clean_html
@@ -25,7 +25,13 @@ def _load_sources():
         rows = []
         with open(config.SOURCES_CSV, newline="", encoding="utf-8-sig") as fh:
             for r in csv.DictReader(fh):
-                rows.append((r["outlet_contains"].lower(), float(r["credibility"]), r["pakistani"] == "1"))
+                rows.append(
+                    (
+                        r["outlet_contains"].lower(),
+                        float(r["credibility"]),
+                        r["pakistani"] == "1",
+                    )
+                )
         # longest match first so "Pakistan Today" does not shadow "Profit by Pakistan Today"
         rows.sort(key=lambda t: -len(t[0]))
         _sources_cache = rows
@@ -86,8 +92,8 @@ def effective_time(published_at_iso, delay_days):
         return None, "date"
     dt = datetime.fromisoformat(published_at_iso)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    dt = dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    dt = dt.astimezone(UTC)
     date_only = dt.minute == 0 and dt.second == 0 and dt.hour in (0, 6, 7, 8)
     if date_only:
         return (dt + timedelta(days=delay_days)).isoformat(), "date"
@@ -97,7 +103,8 @@ def effective_time(published_at_iso, delay_days):
 def prepare_record(raw):
     """Turn a raw feed record into a cleaned article dict, or None if junk."""
     if raw.get("kind") == "announcement":
-        headline, outlet = clean_html(raw.get("title") or ""), None   # PSX titles carry no outlet suffix
+        # PSX titles carry no outlet suffix
+        headline, outlet = clean_html(raw.get("title") or ""), None
     else:
         headline, outlet = split_outlet(raw.get("title"))
     outlet = outlet or raw.get("outlet") or outlet_from_source(raw.get("source", ""))

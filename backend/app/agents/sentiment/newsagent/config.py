@@ -76,7 +76,8 @@ class Params:
     window_days: int = 14                # effective-article window
     shrink_k: float = 3.0                # shrinkage constant k
     neg_multiplier: float = 1.5          # negative-news weight, tuned on validation
-    announcement_tone_weight: float = 0.3   # PSX filings count this much in tone (news = 1.0); tune on 2021 only
+    # PSX filings count this much in tone (news = 1.0); tune on 2021 only
+    announcement_tone_weight: float = 0.3
     neg_threshold: float = 0.6           # P(neg) above this counts as negative
     dup_cosine: float = 0.9              # near-duplicate threshold
     dup_window_days: int = 7

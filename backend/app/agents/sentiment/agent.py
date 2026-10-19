@@ -1,7 +1,7 @@
 """MARS Sentiment & News adapter for the shared FYP AgentOutput contract."""
 import asyncio
 import sqlite3
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
 from app.agents.base import BaseAgent
@@ -17,7 +17,7 @@ TICKER_ALIASES = {"LUCK": "LUCKY", "OGDC": "OGDCL", "SYS": "SYSTEMS", "PTC": "PT
 
 def _decision_date() -> date:
     """Use the latest decision date whose configured UTC cutoff has passed."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = now.date()
     if now.hour < config.DEFAULT_PARAMS.decision_hour_utc:
         result -= timedelta(days=1)
@@ -69,9 +69,13 @@ def _map_output(raw: dict, requested_ticker: str) -> AgentOutput:
     }
     findings = []
     for d in raw.get("drivers") or []:
-        label = driver_labels.get(d.get("name"), str(d.get("name", "Sentiment driver")).replace("_", " ").title())
+        label = driver_labels.get(
+            d.get("name"),
+            str(d.get("name", "Sentiment driver")).replace("_", " ").title(),
+        )
         findings.append(
-            f"{label}: {d.get('direction', 'neutral')} (value {d.get('value')}, z-score {d.get('z')})."
+            f"{label}: {d.get('direction', 'neutral')} "
+            f"(value {d.get('value')}, z-score {d.get('z')})."
         )
     if not findings:
         findings.append(f"Sentiment state is {state_label}; quality score is {quality:.2f}.")
@@ -97,7 +101,11 @@ def _map_output(raw: dict, requested_ticker: str) -> AgentOutput:
         ))
 
     degraded_flags = {"no_recent_news", "low_coverage", "insufficient_history"}
-    status = AgentStatus.DEGRADED if any(f in degraded_flags for f in flags) or quality < 0.30 else AgentStatus.OK
+    status = (
+        AgentStatus.DEGRADED
+        if any(f in degraded_flags for f in flags) or quality < 0.30
+        else AgentStatus.OK
+    )
     metrics = {
         "quality": quality,
         "horizon_days": raw.get("horizon_days"),
@@ -114,7 +122,7 @@ def _map_output(raw: dict, requested_ticker: str) -> AgentOutput:
         "flags": flags,
     }
     as_of_text = str(raw.get("as_of") or _decision_date().isoformat())
-    as_of = datetime.combine(date.fromisoformat(as_of_text), time.min, tzinfo=timezone.utc)
+    as_of = datetime.combine(date.fromisoformat(as_of_text), time.min, tzinfo=UTC)
     return AgentOutput(
         agent=AgentName.SENTIMENT,
         ticker=requested_ticker,
@@ -151,5 +159,7 @@ class SentimentAgent(BaseAgent):
         raw = await asyncio.to_thread(_compute_raw, actual)
         out = _map_output(raw, requested)
         if actual != requested:
-            out.warnings.append(f"Mapped FYP ticker alias {requested} to sentiment ticker {actual}.")
+                out.warnings.append(
+                    f"Mapped FYP ticker alias {requested} to sentiment ticker {actual}."
+                )
         return out

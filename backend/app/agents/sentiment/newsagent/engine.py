@@ -6,7 +6,7 @@ the nightly run, the on-demand request, the back-test and parameter tuning."""
 import math
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta
 
 import numpy as np
 
@@ -23,7 +23,7 @@ def _isnan(x):
 
 
 def cutoff_for(d, params):
-    return datetime.combine(d, time(params.decision_hour_utc), tzinfo=timezone.utc)
+    return datetime.combine(d, time(params.decision_hour_utc), tzinfo=UTC)
 
 
 class Engine:
@@ -45,12 +45,13 @@ class Engine:
             JOIN article_entities e ON e.article_id = a.id
             JOIN article_scores s ON s.article_id = a.id
             ORDER BY a.effective_at, a.id
-            """)
+            """
+        )
         seen_cluster = set()
         for r in cur:
             ts = datetime.fromisoformat(r["effective_at"])
             if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
+                ts = ts.replace(tzinfo=UTC)
             key = (r["entity_type"], r["entity_id"])
             cid = r["cluster_id"] if r["cluster_id"] is not None else r["id"]
             # The earliest member of a cluster (per entity) is the primary item.
@@ -58,12 +59,24 @@ class Engine:
             seen_cluster.add((key, cid))
             cred, _ = credibility(r["outlet"])
             self.scorers.add(r["scorer"])
-            self.rows[key].append({
-                "id": r["id"], "ts": ts, "primary": primary, "cred": cred, "rel": r["relevance"],
-                "tone": r["tone_adj"], "p_neg": r["p_neg"], "title": r["headline"],
-                "outlet": r["outlet"], "url": r["url"], "doc_url": r["doc_url"], "kind": r["kind"],
-                "published_at": r["published_at"], "tags": r["event_tags"] or "",
-            })
+            self.rows[key].append(
+                {
+                    "id": r["id"],
+                    "ts": ts,
+                    "primary": primary,
+                    "cred": cred,
+                    "rel": r["relevance"],
+                    "tone": r["tone_adj"],
+                    "p_neg": r["p_neg"],
+                    "title": r["headline"],
+                    "outlet": r["outlet"],
+                    "url": r["url"],
+                    "doc_url": r["doc_url"],
+                    "kind": r["kind"],
+                    "published_at": r["published_at"],
+                    "tags": r["event_tags"] or "",
+                }
+            )
         for key, lst in self.rows.items():
             self.times[key] = [x["ts"] for x in lst]
 
@@ -103,7 +116,8 @@ class Engine:
             return None
         if bull + bear > 0:
             ratio = (bull - bear) / (bull + bear)
-            agreement = 1.0 - math.sqrt(max(0.0, 1.0 - ratio * ratio))   # Antweiler-Frank
+            # Antweiler-Frank
+            agreement = 1.0 - math.sqrt(max(0.0, 1.0 - ratio * ratio))
         else:
             agreement = 1.0
         return {
@@ -125,7 +139,8 @@ class Engine:
         mad = float(np.median(np.abs(arr - med)))
         scale = 1.4826 * mad
         if scale <= 0:
-            scale = 1.2533 * float(np.mean(np.abs(arr - med)))   # MAD-equivalent fallback
+            # MAD-equivalent fallback
+            scale = 1.2533 * float(np.mean(np.abs(arr - med)))
         if scale <= 0:
             return 0.0
         z = (v - med) / scale
@@ -137,21 +152,33 @@ class Engine:
         p = self.params
         eval_set = set(eval_dates) if eval_dates is not None else set(dates)
         hist = {"net_tone": [], "tone_change": [], "neg_share": [], "attention": []}
-        past = []   # (date, net_tone)
+        # (date, net_tone)
+        past = []
         out = {}
         for d in dates:
             f = self.features(key, cutoff_for(d, p))
             row = None
             if f is not None:
                 base = [t for (pd_, t) in past if (d - pd_).days <= p.baseline_days]
-                tc = f["net_tone"] - float(np.mean(base)) if len(base) >= p.min_baseline_obs else NaN
+                tc = (
+                    f["net_tone"] - float(np.mean(base))
+                    if len(base) >= p.min_baseline_obs
+                    else NaN
+                )
                 row = {**f, "tone_change": tc}
                 past.append((d, f["net_tone"]))
                 if d in eval_set:
                     row["z_net_tone"] = self._z(hist["net_tone"] + [f["net_tone"]], f["net_tone"])
-                    row["z_tone_change"] = self._z(hist["tone_change"] + ([tc] if not _isnan(tc) else []), tc)
-                    row["z_neg_share"] = self._z(hist["neg_share"] + [f["neg_share"]], f["neg_share"])
-                    row["z_attention"] = self._z(hist["attention"] + [f["attention"]], f["attention"])
+                    row["z_tone_change"] = self._z(
+                        hist["tone_change"] + ([tc] if not _isnan(tc) else []),
+                        tc,
+                    )
+                    row["z_neg_share"] = self._z(
+                        hist["neg_share"] + [f["neg_share"]], f["neg_share"]
+                    )
+                    row["z_attention"] = self._z(
+                        hist["attention"] + [f["attention"]], f["attention"]
+                    )
                     subs = []
                     if not _isnan(row["z_net_tone"]):
                         subs.append(row["z_net_tone"] / p.z_clip)
@@ -196,7 +223,8 @@ class Engine:
         if s_stock is not None and n >= k:
             score = s_stock
         elif not srow and parent_val is None:
-            score = 0.0                                   # nothing at any level (methodology 4.5.3)
+            # nothing at any level (methodology 4.5.3)
+            score = 0.0
             flags.append("no_recent_news")
         else:
             w = n / (n + k) if (s_stock is not None and n > 0) else 0.0
@@ -207,7 +235,8 @@ class Engine:
                 flags.append("no_recent_news")
             else:
                 if s_stock is None:
-                    flags.append("insufficient_history")  # fewer than min_z_obs days of baseline
+                    # fewer than min_z_obs days of baseline
+                    flags.append("insufficient_history")
                 if n < k:
                     flags.append("low_coverage")
         score = max(-1.0, min(1.0, score))
@@ -222,8 +251,14 @@ class Engine:
         q = max(0.0, min(1.0, q))
         t = p.state_threshold
         state = "Bullish" if score > t else "Bearish" if score < -t else "Neutral"
-        return {"score": score, "quality": q, "state": state, "flags": flags,
-                "parent": parent_name, "parent_score": parent_val}
+        return {
+            "score": score,
+            "quality": q,
+            "state": state,
+            "flags": flags,
+            "parent": parent_name,
+            "parent_score": parent_val,
+        }
 
     # ----------------------------------------------------------- public APIs
     def _dates(self, key, end):
@@ -253,9 +288,15 @@ class Engine:
             for d in eval_dates:
                 srow = ser.get(d)
                 fin = self.finalize(t, d, srow, sec.get(d), mkt.get(d))
-                rows.append({"ticker": t, "as_of": d.isoformat(), **fin,
-                             "n_eff": srow["n_eff"] if srow else 0.0,
-                             "net_tone": srow["net_tone"] if srow else None})
+                rows.append(
+                    {
+                        "ticker": t,
+                        "as_of": d.isoformat(),
+                        **fin,
+                        "n_eff": srow["n_eff"] if srow else 0.0,
+                        "net_tone": srow["net_tone"] if srow else None,
+                    }
+                )
         return rows
 
     def output(self, ticker, as_of):
@@ -285,22 +326,56 @@ class Engine:
                 if _isnan(z):
                     continue
                 contrib = sign * z / p.z_clip
-                drivers.append({"name": name, "value": round(float(srow[rawk]), 4),
-                                "z": round(float(z), 3), "contribution": round(contrib, 3),
-                                "direction": "bullish" if contrib > 0.02 else "bearish" if contrib < -0.02 else "neutral"})
+                drivers.append(
+                    {
+                        "name": name,
+                        "value": round(float(srow[rawk]), 4),
+                        "z": round(float(z), 3),
+                        "contribution": round(contrib, 3),
+                        "direction": (
+                            "bullish"
+                            if contrib > 0.02
+                            else "bearish"
+                            if contrib < -0.02
+                            else "neutral"
+                        ),
+                    }
+                )
             drivers.sort(key=lambda x: -abs(x["contribution"]))
             drivers = drivers[:3]
 
         evidence = []
         window = self._window(key, cutoff)
         ln2 = math.log(2)
-        ranked = sorted(window, key=lambda r: -(r["cred"] * r["rel"] * abs(r["tone"]) *
-                        math.exp(-ln2 * max(0.0, (cutoff - r["ts"]).total_seconds() / 86400.0) / p.half_life_days)))
+        ranked = sorted(
+            window,
+            key=lambda r: -(
+                r["cred"]
+                * r["rel"]
+                * abs(r["tone"])
+                * math.exp(
+                    -ln2
+                    * max(
+                        0.0,
+                        (cutoff - r["ts"]).total_seconds() / 86400.0,
+                    )
+                    / p.half_life_days
+                )
+            ),
+        )
         for r in ranked[:5]:
-            evidence.append({"article_id": r["id"], "title": r["title"], "outlet": r["outlet"],
-                             "url": r["doc_url"] or r["url"], "published_at": r["published_at"],
-                             "tone": round(float(r["tone"]), 3),
-                             "event_tags": [t for t in r["tags"].split(",") if t], "kind": r["kind"]})
+            evidence.append(
+                {
+                    "article_id": r["id"],
+                    "title": r["title"],
+                    "outlet": r["outlet"],
+                    "url": r["doc_url"] or r["url"],
+                    "published_at": r["published_at"],
+                    "tone": round(float(r["tone"]), 3),
+                    "event_tags": [t for t in r["tags"].split(",") if t],
+                    "kind": r["kind"]
+                }
+            )
         outlets = sorted({r["outlet"] for r in window if r["outlet"]})
         return {
             "agent": config.AGENT_NAME,
@@ -318,9 +393,17 @@ class Engine:
                 "window_days": p.window_days,
                 "outlets": outlets,
                 "agreement": round(srow["agreement"], 3) if srow else None,
-                "attention_z": None if (not srow or _isnan(srow.get("z_attention"))) else round(float(srow["z_attention"]), 3),
+                "attention_z": (
+                    None
+                    if (not srow or _isnan(srow.get("z_attention")))
+                    else round(float(srow["z_attention"]), 3)
+                ),
                 "parent": fin["parent"],
-                "parent_score": None if fin["parent_score"] is None else round(fin["parent_score"], 4),
+                "parent_score": (
+                    None
+                    if fin["parent_score"] is None
+                    else round(fin["parent_score"], 4)
+                ),
             },
             "flags": fin["flags"],
             "scorer": sorted(s for s in self.scorers if s),

@@ -7,8 +7,10 @@ from datetime import datetime, timedelta
 
 from app.agents.sentiment.newsagent.config import DEFAULT_PARAMS
 
-STOP = set("a an the of to in on for and or at by with from as is are was be its it this that said says "
-           "after over amid into new".split())
+STOP = set(
+    "a an the of to in on for and or at by with from as is are was be its it this that said says "
+    "after over amid into new".split()
+)
 
 
 def tokens(text):
@@ -28,7 +30,8 @@ def assign_clusters(conn, params=DEFAULT_PARAMS):
     """Give every article without a cluster a cluster_id (the id of the earliest
     member). Returns the number of articles clustered."""
     rows = conn.execute(
-        "SELECT id, headline, effective_at, cluster_id FROM articles ORDER BY effective_at, id").fetchall()
+        "SELECT id, headline, effective_at, cluster_id FROM articles ORDER BY effective_at, id"
+    ).fetchall()
     window = timedelta(days=params.dup_window_days)
     recent = []   # (effective_dt, id, cluster_id, Counter)
     n = 0

@@ -5,9 +5,22 @@ import json
 import logging
 from datetime import date, timedelta
 
-from app.agents.sentiment.newsagent import cleaning, config, dedup, events, polarity, psx_announcements, rss_ingest
-from app.agents.sentiment.newsagent.database import (create_database, get_processing, insert_article, insert_entities,
-                          record_processing)
+from app.agents.sentiment.newsagent import (
+    cleaning,
+    config,
+    dedup,
+    events,
+    polarity,
+    psx_announcements,
+    rss_ingest,
+)
+from app.agents.sentiment.newsagent.database import (
+    create_database,
+    get_processing,
+    insert_article,
+    insert_entities,
+    record_processing,
+)
 from app.agents.sentiment.newsagent.engine import Engine
 from app.agents.sentiment.newsagent.entities import link_entities, load_companies
 
@@ -31,10 +44,17 @@ def store_records(conn, records):
             continue
         _, is_pk = cleaning.credibility(prepared["outlet"])
         if prepared.get("kind") == "announcement" and prepared.get("ticker"):
-            ents = [{"entity_type": "ticker", "entity_id": prepared["ticker"],
-                     "relevance": 1.0, "matched_name": prepared.get("psx_symbol")}]
+            ents = [
+                {
+                    "entity_type": "ticker",
+                    "entity_id": prepared["ticker"],
+                    "relevance": 1.0,
+                    "matched_name": prepared.get("psx_symbol"),
+                }
+            ]
         else:
-            ents = link_entities(prepared["headline"], prepared["summary"], prepared.get("text", ""), is_pk)
+            ents = link_entities(prepared["headline"], prepared["summary"],
+                                 prepared.get("text", ""), is_pk)
         if not ents:
             record_processing(conn, key, "no_match")
             stats["no_match"] += 1
@@ -55,9 +75,13 @@ def score_pending(conn, scorer, batch=256):
     n = 0
     while True:
         rows = conn.execute(
-            """SELECT a.id, a.headline, a.summary FROM articles a
-               LEFT JOIN article_scores s ON s.article_id = a.id
-               WHERE s.article_id IS NULL ORDER BY a.id LIMIT ?""", (batch,)).fetchall()
+            """
+            SELECT a.id, a.headline, a.summary FROM articles a
+            LEFT JOIN article_scores s ON s.article_id = a.id
+            WHERE s.article_id IS NULL ORDER BY a.id LIMIT ?
+            """,
+            (batch,),
+        ).fetchall()
         if not rows:
             break
         probs = scorer.score([r["headline"] for r in rows])
@@ -69,8 +93,20 @@ def score_pending(conn, scorer, batch=256):
                    (article_id, p_pos, p_neg, p_neu, tone, confidence, event_tags, event_adj,
                     tone_adj, scorer, model_version)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-                (r["id"], pp, pn, pu, tone, polarity.confidence_from_probs(pu), ",".join(tags), adj,
-                 polarity.clip(tone + adj), scorer.name, getattr(scorer, "version", scorer.name)))
+                (
+                    r["id"],
+                    pp,
+                    pn,
+                    pu,
+                    tone,
+                    polarity.confidence_from_probs(pu),
+                    ",".join(tags),
+                    adj,
+                    polarity.clip(tone + adj),
+                    scorer.name,
+                    getattr(scorer, "version", scorer.name),
+                ),
+            )
         conn.commit()
         n += len(rows)
     return n
@@ -82,8 +118,18 @@ def store_outputs(conn, outputs):
             """INSERT OR REPLACE INTO agent_outputs
                (ticker, as_of, agent, score, state, quality, output_json, model_version, params_key)
                VALUES (?,?,?,?,?,?,?,?,?)""",
-            (o["ticker"], o["as_of"], config.AGENT_NAME, o["score"], o["state"], o["quality"],
-             json.dumps(o), o["model_version"], o["params_key"]))
+                        (
+                o["ticker"],
+                o["as_of"],
+                config.AGENT_NAME,
+                o["score"],
+                o["state"],
+                o["quality"],
+                json.dumps(o),
+                o["model_version"],
+                o["params_key"],
+            ),
+        )
     conn.commit()
 
 
@@ -113,11 +159,19 @@ def run(db_path=None, as_of=None, publisher=True, google_days=None, psx_days=30,
         if google_days is None:
             google_days = config.GOOGLE_NEWS_NIGHTLY_LOOKBACK_DAYS
         if google_days:
-            r, f = rss_ingest.collect_google_news(as_of - timedelta(days=google_days), as_of, tickers=tickers)
+            r, f = rss_ingest.collect_google_news(
+                as_of - timedelta(days=google_days),
+                as_of,
+                tickers=tickers,
+            )
             records += r
             report["failures"].update(f)
         if psx_days:
-            r, f = psx_announcements.collect(days=psx_days, end=as_of, tickers=tickers)
+            r, f = psx_announcements.collect(
+                days=psx_days,
+                end=as_of,
+                tickers=tickers,
+            )
             records += r
             report["failures"].update(f)
         if limit:
@@ -136,21 +190,36 @@ def run(db_path=None, as_of=None, publisher=True, google_days=None, psx_days=30,
 
 
 def main():
-    ap = argparse.ArgumentParser(description="MARS Sentiment & News agent: nightly pipeline")
+    ap = argparse.ArgumentParser(
+        description="MARS Sentiment & News agent: nightly pipeline"
+    )
     ap.add_argument("--db")
     ap.add_argument("--as-of", help="YYYY-MM-DD (default today)")
     ap.add_argument("--no-publisher-feeds", action="store_true")
     ap.add_argument("--google-days", type=int, help="Google News lookback in days (0 disables)")
-    ap.add_argument("--psx-days", type=int, default=30, help="PSX announcements lookback (0 disables)")
+    ap.add_argument("--psx-days", type=int, default=30,
+                    help="PSX announcements lookback (0 disables)")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--tickers", nargs="*")
     ap.add_argument("--no-score", action="store_true", help="ingest only")
     ap.add_argument("--allow-fallback", action="store_true",
                     help="use the lexicon fallback if FinBERT is missing (TEST RUNS ONLY)")
     a = ap.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    rep = run(a.db, date.fromisoformat(a.as_of) if a.as_of else None, not a.no_publisher_feeds,
-              a.google_days, a.psx_days, a.limit, a.allow_fallback, not a.no_score, a.tickers)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+    rep = run(
+        a.db,
+        date.fromisoformat(a.as_of) if a.as_of else None,
+        not a.no_publisher_feeds,
+        a.google_days,
+        a.psx_days,
+        a.limit,
+        a.allow_fallback,
+        not a.no_score,
+        a.tickers,
+    )
     print(json.dumps(rep, indent=2, default=str))
 
 
