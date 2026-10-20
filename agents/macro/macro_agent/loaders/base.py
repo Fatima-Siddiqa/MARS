@@ -44,13 +44,14 @@ def normalise_obs_dates(df: pd.DataFrame, frequency: str) -> pd.DataFrame:
     return df
 
 
-def http_get(url: str, params: dict | None = None, retries: int = 3, timeout: int = 30) -> requests.Response:
+def http_get(url: str, params: dict | None = None, retries: int = 3, timeout: int = 30,
+             headers: dict | None = None) -> requests.Response:
     if os.environ.get("MACRO_AGENT_OFFLINE") == "1":
         raise LoaderUnavailable("offline mode (MACRO_AGENT_OFFLINE=1)")
     last: Exception | None = None
     for i in range(retries):
         try:
-            r = requests.get(url, params=params, headers=UA, timeout=timeout)
+            r = requests.get(url, params=params, headers={**UA, **(headers or {})}, timeout=timeout)
             r.raise_for_status()
             return r
         except requests.RequestException as e:      # noqa: PERF203

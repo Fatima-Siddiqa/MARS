@@ -185,10 +185,16 @@ class EvalResult:
 def run_evaluation(pipe: MacroPipeline, lockbox: bool = False, force: bool = False, out_dir: str | Path | None = None,
                    ticker: str | None = None) -> EvalResult:
     cfg, ev = pipe.cfg, pipe.cfg.evaluation
-    h = int(ev["label_horizon"])
     kse = pipe.kse100()
     if kse.empty:
         raise RuntimeError("KSE-100 series is required for evaluation")
+    if len(kse) > 2 and kse.index.to_series().diff().median() > pd.Timedelta(days=20):
+        # monthly market index (e.g. World Bank GEM): the trading-day settings become months (21 trading days each)
+        def to_m(days):
+            return max(1, round(int(days) / 21))
+        ev = {**ev, **{k: to_m(ev[k]) for k in ("label_horizon", "initial_train_days", "test_window_days", "purge_days")}}
+    step_unit = "months" if ev is not cfg.evaluation else "trading days"
+    h = int(ev["label_horizon"])
     lab = make_labels(kse, h)
     df, sf, qf, comp = pipe.score_series(ticker)
     idx = lab.index.intersection(df.index)
@@ -213,6 +219,7 @@ def run_evaluation(pipe: MacroPipeline, lockbox: bool = False, force: bool = Fal
 
     report: dict = {
         "generated_at": datetime.now(timezone.utc).isoformat(), "model_version": cfg.model_version, "horizon_days": h,
+        "step_unit": step_unit,
         "ticker": ticker, "data_warning": None,
         "design": {"walk_forward_folds": len(folds), "initial_train_days": ev["initial_train_days"], "test_window_days": ev["test_window_days"],
                    "purge_days": purge, "lockbox_start": str(lock_start.date()), "dev_period": [str(dev_idx.min().date()), str(dev_idx.max().date())] if len(dev_idx) else None,
@@ -263,8 +270,9 @@ def render_md(r: dict) -> str:
     L = [f"# Macro agent evaluation ({r['model_version']})", ""]
     if r.get("data_warning"):
         L += [f"> **{r['data_warning']}**", ""]
-    L += [f"Horizon: {r['horizon_days']} trading days. Walk-forward folds: {r['design']['walk_forward_folds']}, "
-          f"OOS period: {r['design']['oos_period']}, purge: {r['design']['purge_days']} days.", "", "## Summary", r["honest_summary"], "",
+    unit = r.get("step_unit", "trading days")
+    L += [f"Horizon: {r['horizon_days']} {unit}. Walk-forward folds: {r['design']['walk_forward_folds']}, "
+          f"OOS period: {r['design']['oos_period']}, purge: {r['design']['purge_days']} {unit}.", "", "## Summary", r["honest_summary"], "",
           "## Walk-forward out-of-sample", "", "| strategy | n | rank corr (non-overlap) | p | hit rate bull/bear | share non-neutral |", "|---|---|---|---|---|---|"]
     def fmt(x, f="{:+.3f}"): return "n/a" if x is None else f.format(x)
     for k, m in r["walk_forward_oos"].items():

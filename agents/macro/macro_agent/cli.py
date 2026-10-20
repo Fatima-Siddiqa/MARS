@@ -15,6 +15,10 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("refresh", help="fetch all sources into macro_raw (versioned) and log data quality")
     sub.add_parser("nightly", help="refresh + precompute market-level score + alerts")
+    fo = sub.add_parser("fetch-open", help="download real series from open sources (World Bank, BIS, IMF, FRED) into data/drop")
+    fo.add_argument("--only", nargs="*")
+    ml = sub.add_parser("ml-eval", help="research: monthly walk-forward of ML challengers vs the rules, with ablations")
+    ml.add_argument("--out", default=None)
     sub.add_parser("demo-data", help="write SYNTHETIC csvs to data/drop and load them (offline demo/tests only)")
     s = sub.add_parser("score", help="print the output JSON")
     s.add_argument("--ticker"); s.add_argument("--as-of"); s.add_argument("--llm", action="store_true")
@@ -36,8 +40,17 @@ def main(argv=None) -> int:
         from .orchestrator import run_nightly
         r = run_nightly(pipe)
         print(json.dumps({"alerts": r["alerts"], "output": r["output"]}, indent=2))
+    elif a.cmd == "fetch-open":
+        from .fetch_open import fetch_all
+        print(json.dumps(fetch_all(cfg, a.only), indent=2))
+    elif a.cmd == "ml-eval":
+        from .ml_research import run_ml_research
+        res = run_ml_research(pipe, out_dir=a.out)
+        print(res.path_md.read_text())
+        print(f"written: {res.path_json}")
     elif a.cmd == "demo-data":
         import os
+
         from .devdata import write_drop_files
         os.environ["MACRO_AGENT_OFFLINE"] = "1"
         write_drop_files(cfg)
@@ -47,6 +60,7 @@ def main(argv=None) -> int:
         print(json.dumps(pipe.score(a.as_of, a.ticker, use_llm=True if a.llm else None), indent=2))
     elif a.cmd == "serve":
         import uvicorn
+
         from .orchestrator import create_app
         uvicorn.run(create_app(pipe), host=a.host, port=a.port)
     elif a.cmd == "eval":

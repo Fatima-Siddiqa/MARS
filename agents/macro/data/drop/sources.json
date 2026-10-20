@@ -1,0 +1,72 @@
+{
+  "pkr_usd": {
+    "status": "ok",
+    "rows": 836,
+    "first": "1957-01-31",
+    "last": "2026-08-31",
+    "frequency": "monthly",
+    "url": "https://stats.bis.org/api/v1/data/WS_XRU/M.PK.PKR.A?format=csv"
+  },
+  "cpi_yoy": {
+    "status": "ok",
+    "rows": 475,
+    "first": "1987-01-31",
+    "last": "2026-07-31",
+    "frequency": "monthly",
+    "url": "https://api.worldbank.org/v2/country/PAK/indicator/CPTOTSAXNZGY?source=15&format=json&per_page=5000&date=1980M01:2035M12"
+  },
+  "fx_reserves": {
+    "status": "ok",
+    "rows": 438,
+    "first": "1990-01-31",
+    "last": "2026-06-30",
+    "frequency": "monthly",
+    "url": "https://api.worldbank.org/v2/country/PAK/indicator/TOTRESV?source=15&format=json&per_page=5000&date=1980M01:2035M12"
+  },
+  "kse100": {
+    "status": "ok",
+    "rows": 239,
+    "first": "2006-09-30",
+    "last": "2026-08-31",
+    "frequency": "monthly",
+    "url": "https://api.worldbank.org/v2/country/PAK/indicator/DSTKMKTXN?source=15&format=json&per_page=5000&date=1980M01:2035M12"
+  },
+  "gold": {
+    "status": "ok",
+    "rows": 801,
+    "first": "1960-01-31",
+    "last": "2026-09-30",
+    "frequency": "monthly",
+    "url": "https://thedocs.worldbank.org/en/doc/74e8be41ceb20fa0da750cda2f6b9e4e-0050012026/related/CMO-Historical-Data-Monthly.xlsx"
+  },
+  "tbill_3m": {
+    "status": "ok",
+    "rows": 281,
+    "first": "1996-07-31",
+    "last": "2021-12-31",
+    "frequency": "monthly",
+    "url": "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/MFS_IR/+/PAK.GSTBILY_RT_PT_A_PT.M"
+  },
+  "brent": {
+    "status": "ok",
+    "rows": 9108,
+    "first": "1987-05-20",
+    "last": "2026-10-14",
+    "frequency": "daily",
+    "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILBRENTEU"
+  },
+  "gdp_growth": {
+    "status": "ok",
+    "rows": 65,
+    "first": "1961-06-30",
+    "last": "2025-06-30",
+    "frequency": "annual",
+    "url": "https://api.worldbank.org/v2/country/PAK/indicator/NY.GDP.MKTP.KD.ZG?format=json&per_page=500"
+  },
+  "current_account": {
+    "status": "no open source: export from SBP EasyData into data/drop/"
+  },
+  "remittances": {
+    "status": "no open source: export from SBP EasyData into data/drop/"
+  }
+}

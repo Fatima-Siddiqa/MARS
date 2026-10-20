@@ -4,18 +4,22 @@ Rule-based, explainable macroeconomic agent for PSX equities. It turns SBP / PBS
 score in [-1, +1], a state (Bullish / Neutral / Bearish), a confidence, and an evidence list with a source for every
 number. It never recommends BUY / HOLD / AVOID. Implements `MARS - Macro Agent Methodology` and the architecture diagram.
 
-> **Status:** built and tested end-to-end on **synthetic** data only (`macro-agent demo-data`; every output built on it
-> carries a "DEMO DATA" warning). No real series have been loaded. Items marked `[TO CONFIRM]` in
+> **Status:** runs on **real** data for 9 of 11 series (open sources via `macro-agent fetch-open`, listed in
+> `data/drop/SOURCES.md`). Current account and remittances still need an SBP EasyData export, and the open T-bill
+> series ends in 2021. An ML-vs-rules research prototype with ablations is in `docs/ml_prototype.md`. Items marked `[TO CONFIRM]` in
 > `config/macro_agent.yaml` (release lags, SBP series codes, yield-spread sign, gold direction, source terms of use)
 > must be checked before any real result is reported.
 
 ## Quick start
 ```bash
-pip install -e ".[dev]"
-pytest                                   # 32 tests
-macro-agent demo-data                    # SYNTHETIC data -> data/drop -> macro_raw (offline)
+pip install -e ".[dev,ml]"
+pytest                                   # 41 tests
+macro-agent fetch-open                   # REAL open data (World Bank, BIS, IMF, FRED) -> data/drop
+macro-agent refresh                      # data/drop + online sources -> macro_raw (use a fresh DB, not one with demo rows)
+macro-agent demo-data                    # or: SYNTHETIC data -> data/drop -> macro_raw (offline tests/demos only)
 macro-agent score --ticker OGDC          # prints the output JSON
 macro-agent eval                         # walk-forward evaluation -> reports/
+macro-agent ml-eval                      # research: ML challengers vs rules + ablations -> reports/ml/
 macro-agent serve                        # GET /agents/macro?ticker=OGDC&as_of=2026-10-10
 ```
 Real data: put CSV exports in `data/drop/` (see the README there) and run `macro-agent refresh`; Brent (FRED) and GDP

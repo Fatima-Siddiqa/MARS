@@ -55,17 +55,17 @@ series:
     source_url: "https://easydata.sbp.org.pk/"
     file: "data/drop/policy_rate.csv"
   tbill_3m:
-    source: sbp_easydata
+    source: sbp_easydata            # drop file from `macro-agent fetch-open` = IMF MFS_IR monthly T-bill yield (ends 2021-12)
     unit: percent
-    frequency: weekly
-    release_lag_days: 1
-    expected_interval_days: 7
-    tolerance_days: 7
+    frequency: monthly              # weekly once exported from SBP EasyData
+    release_lag_days: 7             # [TO CONFIRM]
+    expected_interval_days: 31
+    tolerance_days: 15
     plausible: [0, 40]
-    source_url: "https://easydata.sbp.org.pk/"
+    source_url: "https://data.imf.org/ (MFS_IR, PAK T-bill yield); current series: https://easydata.sbp.org.pk/"
     file: "data/drop/tbill_3m.csv"
   cpi_yoy:
-    source: pbs
+    source: pbs                     # drop file from `macro-agent fetch-open` = World Bank GEM CPTOTSAXNZGY
     unit: percent
     frequency: monthly
     release_lag_days: 3             # [TO CONFIRM] PBS releases in the first days of the next month
@@ -73,27 +73,27 @@ series:
     tolerance_days: 10
     plausible: [-5, 50]
     breaks: ["2016-07-01"]          # CPI base year 2007-08 -> 2015-16 (flag only)
-    source_url: "https://www.pbs.gov.pk/"
+    source_url: "https://data.worldbank.org/ (Global Economic Monitor, CPI % y-o-y); primary: https://www.pbs.gov.pk/"
     file: "data/drop/cpi_yoy.csv"
   pkr_usd:
-    source: sbp_easydata
+    source: sbp_easydata            # drop file from `macro-agent fetch-open` = BIS WS_XRU monthly average
     unit: PKR per USD
-    frequency: daily
-    release_lag_days: 1
-    expected_interval_days: 1
-    tolerance_days: 4               # weekends and holidays
-    plausible: [50, 600]
-    source_url: "https://easydata.sbp.org.pk/"
+    frequency: monthly              # daily once exported from SBP EasyData (BIS daily ends 2019-03)
+    release_lag_days: 3
+    expected_interval_days: 31
+    tolerance_days: 15
+    plausible: [3, 600]             # BIS history starts 1957 (PKR 4.76)
+    source_url: "https://stats.bis.org/ (WS_XRU, PKR per USD); primary: https://easydata.sbp.org.pk/"
     file: "data/drop/pkr_usd.csv"
   fx_reserves:
-    source: sbp_easydata
+    source: sbp_easydata            # drop file from `macro-agent fetch-open` = World Bank GEM TOTRESV (monthly)
     unit: USD million
-    frequency: weekly
-    release_lag_days: 7             # [TO CONFIRM]
-    expected_interval_days: 7
-    tolerance_days: 10
+    frequency: monthly              # weekly once exported from SBP EasyData
+    release_lag_days: 10            # [TO CONFIRM]
+    expected_interval_days: 31
+    tolerance_days: 15
     plausible: [0, 100000]
-    source_url: "https://easydata.sbp.org.pk/"
+    source_url: "https://data.worldbank.org/ (Global Economic Monitor, total reserves); primary: https://easydata.sbp.org.pk/"
     file: "data/drop/fx_reserves.csv"
   current_account:
     source: sbp_easydata
@@ -127,13 +127,13 @@ series:
     source_url: "https://fred.stlouisfed.org/series/DCOILBRENTEU"
     file: "data/drop/brent.csv"          # offline fallback
   gold:
-    source: csv_file                # World Bank Pink Sheet (monthly) or Yahoo GC=F (daily backup)
+    source: csv_file                # World Bank Pink Sheet (monthly), via `macro-agent fetch-open`
     unit: USD per troy oz
-    frequency: daily
-    release_lag_days: 1
-    expected_interval_days: 1
-    tolerance_days: 7
-    plausible: [100, 10000]
+    frequency: monthly
+    release_lag_days: 5             # Pink Sheet is published early in the following month
+    expected_interval_days: 31
+    tolerance_days: 40
+    plausible: [20, 10000]          # Pink Sheet starts 1960 at USD 35
     source_url: "https://www.worldbank.org/en/research/commodity-markets"
     file: "data/drop/gold.csv"
   gdp_growth:
@@ -149,14 +149,14 @@ series:
     source_url: "https://data.worldbank.org/indicator/NY.GDP.MKTP.KD.ZG?locations=PK"
     file: "data/drop/gdp_growth.csv"     # offline fallback
   kse100:
-    source: psx
-    unit: index points
-    frequency: daily
+    source: psx                     # drop file from `macro-agent fetch-open` = World Bank GEM DSTKMKTXN:
+    unit: index (rebased)           # a MONTHLY-AVERAGE, rebased PSX index (not month-end KSE-100 points).
+    frequency: monthly              # Prefer the team's daily data/raw/KSE_100_index.csv when available.
     release_lag_days: 0
-    expected_interval_days: 1
-    tolerance_days: 4
-    plausible: [100, 500000]
-    source_url: "https://dps.psx.com.pk/"
+    expected_interval_days: 31
+    tolerance_days: 15
+    plausible: [1, 500000]
+    source_url: "https://data.worldbank.org/ (Global Economic Monitor, stock market index in PKR); primary: https://dps.psx.com.pk/"
     file: "data/drop/kse100.csv"
 
 # orient: +1 = higher is bullish, -1 = higher is bearish. enabled=false => computed but not scored.
@@ -168,7 +168,7 @@ features:
   cpi_trend:        {pillar: inflation, orient: -1, series: [cpi_yoy],                 unit: pp,       label: "the recent trend in inflation"}
   pkr_dep_30d:      {pillar: external,  orient: -1, series: [pkr_usd],                 unit: percent,  label: "the rupee's 30-day depreciation"}
   pkr_dep_90d:      {pillar: external,  orient: -1, series: [pkr_usd],                 unit: percent,  label: "the rupee's 90-day depreciation"}
-  pkr_vol_30d:      {pillar: external,  orient: -1, series: [pkr_usd],                 unit: percent,  label: "the rupee's 30-day volatility"}
+  pkr_vol_30d:      {pillar: external,  orient: -1, series: [pkr_usd],                 unit: percent,  label: "the rupee's 30-day volatility", enabled: false}   # needs DAILY pkr_usd; on monthly data it is a 30-month volatility
   reserves_chg_3m:  {pillar: external,  orient: +1, series: [fx_reserves],             unit: percent,  label: "the 3-month change in FX reserves"}
   ca_3m_sum:        {pillar: external,  orient: +1, series: [current_account],         unit: USD million, label: "the 3-month current-account balance"}
   remittances_yoy:  {pillar: external,  orient: +1, series: [remittances],             unit: percent,  label: "remittance growth"}

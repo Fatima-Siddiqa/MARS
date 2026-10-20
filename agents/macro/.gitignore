@@ -4,7 +4,19 @@ __pycache__/
 data/*.db
 data/lockbox_run.json
 data/drop/*.csv
+# real open-data drops are committed (see data/drop/SOURCES.md); SBP exports stay local
+!data/drop/brent.csv
+!data/drop/policy_rate.csv
+!data/drop/pkr_usd.csv
+!data/drop/cpi_yoy.csv
+!data/drop/fx_reserves.csv
+!data/drop/kse100.csv
+!data/drop/gold.csv
+!data/drop/tbill_3m.csv
+!data/drop/gdp_growth.csv
 reports/
 .env
 .venv/
 *.egg-info/
+data/downloads/
+data/drop/_synthetic/
