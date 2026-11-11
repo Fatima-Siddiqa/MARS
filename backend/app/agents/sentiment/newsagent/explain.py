@@ -9,7 +9,7 @@ import requests
 from app.agents.sentiment.newsagent import config
 
 NUM = re.compile(
-    r"[-+]?\d+(?:\\.\d+)?"
+    r"[-+]?\d+(?:\.\d+)?"
 )
 
 

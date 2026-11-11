@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS article_scores (
     article_id INTEGER PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
     p_pos REAL, p_neg REAL, p_neu REAL,
     tone REAL,                         -- P(pos) - P(neg)
-    confidence REAL,                   -- 1 - P(neu)
+    confidence REAL,                   -- maximum predicted-class probability
     event_tags TEXT,                   -- comma separated
     event_adj REAL DEFAULT 0,
     tone_adj REAL,                     -- tone + event adjustment, clipped to [-1, 1]

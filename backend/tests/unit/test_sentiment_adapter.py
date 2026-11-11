@@ -1,4 +1,4 @@
-from app.agents.sentiment.agent import _map_output
+from app.agents.sentiment.newsagent.agent import _map_output
 from app.schemas.agent_output import AgentStatus, Stance
 
 
@@ -21,7 +21,12 @@ def test_sentiment_output_maps_to_shared_contract():
                     "tone": -0.3,
                 }
             ],
-            "context": {"articles_in_window": 4, "effective_articles": 3.5, "window_days": 14},
+            "context": {
+                "articles_in_window": 4,
+                "effective_articles": 3.5,
+                "window_days": 14,
+                "model_confidence": 0.42,
+            },
             "flags": [],
             "scorer": ["finbert"],
             "model_version": "sentiment-news-1.0",

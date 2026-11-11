@@ -6,7 +6,7 @@ import re
 from app.agents.sentiment.newsagent.config import DEFAULT_PARAMS
 
 PCT = re.compile(
-    r"(\d{1,3}(?:\\.\d+)?)\s?(?:%|pc|percent|per cent)",
+    r"(\d{1,3}(?:\.\d+)?)\s?(?:%|pc|percent|per cent)",
     re.I,
 )
 

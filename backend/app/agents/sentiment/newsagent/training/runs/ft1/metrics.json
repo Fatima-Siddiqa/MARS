@@ -1,0 +1,100 @@
+{
+  "n_train": 961,
+  "n_val": 169,
+  "n_test": 150,
+  "baseline": {
+    "accuracy": 0.6533333333333333,
+    "macro_f1": 0.669721511793123,
+    "per_class_f1": {
+      "positive": 0.5434782608695652,
+      "negative": 0.8333333333333334,
+      "neutral": 0.6323529411764706
+    }
+  },
+  "finetuned": {
+    "accuracy": 0.7866666666666666,
+    "macro_f1": 0.7949052144082079,
+    "per_class_f1": {
+      "positive": 0.7191011235955056,
+      "negative": 0.8918918918918919,
+      "neutral": 0.7737226277372263
+    }
+  },
+  "macro_f1_gain_95ci": [
+    0.04419215735450727,
+    0.20225212855154756
+  ],
+  "confusion_finetuned_rows_true_cols_pred": {
+    "order": [
+      "positive",
+      "negative",
+      "neutral"
+    ],
+    "matrix": [
+      [
+        32,
+        0,
+        18
+      ],
+      [
+        1,
+        33,
+        2
+      ],
+      [
+        6,
+        5,
+        53
+      ]
+    ]
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "val_macro_f1": 0.5272505272505272
+    },
+    {
+      "epoch": 2,
+      "val_macro_f1": 0.5542826221397651
+    },
+    {
+      "epoch": 3,
+      "val_macro_f1": 0.6637086513994911
+    },
+    {
+      "epoch": 4,
+      "val_macro_f1": 0.6607898384214174
+    },
+    {
+      "epoch": 5,
+      "val_macro_f1": 0.7093603023135687
+    },
+    {
+      "epoch": 6,
+      "val_macro_f1": 0.7218634431749186
+    },
+    {
+      "epoch": 7,
+      "val_macro_f1": 0.6856851634469999
+    },
+    {
+      "epoch": 8,
+      "val_macro_f1": 0.6941484362339977
+    }
+  ],
+  "args": {
+    "labels": "labelling_prelabelled.csv",
+    "agreement": null,
+    "gold": "gold.csv",
+    "out": "runs\\ft1",
+    "base": "ProsusAI/finbert",
+    "split": "group",
+    "full": false,
+    "rank": 16,
+    "lr": null,
+    "epochs": 8,
+    "batch": 16,
+    "patience": 2,
+    "seed": 1
+  }
+}

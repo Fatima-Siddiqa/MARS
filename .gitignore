@@ -47,3 +47,16 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Sentiment newsagent local databases and backups
+backend/app/agents/sentiment/newsagent/data/**/*.db
+backend/app/agents/sentiment/newsagent/data/snapshots/
+
+# Generated/private sentiment training datasets
+backend/app/agents/sentiment/newsagent/training/data/
+
+# Experimental adapters: keep FT1 only
+backend/app/agents/sentiment/newsagent/training/runs/*/adapter/
+!backend/app/agents/sentiment/newsagent/training/runs/ft1/
+!backend/app/agents/sentiment/newsagent/training/runs/ft1/adapter/
+!backend/app/agents/sentiment/newsagent/training/runs/ft1/adapter/**

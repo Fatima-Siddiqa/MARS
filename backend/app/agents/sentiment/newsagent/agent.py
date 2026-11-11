@@ -130,9 +130,9 @@ def _map_output(raw: dict, requested_ticker: str) -> AgentOutput:
         status=status,
         stance=stance,
         score=max(-1.0, min(1.0, score)),
-        # The shared UI has one reliability field. For sentiment this is the
-        # uncalibrated MARS quality index, shown in the UI as "Data quality".
-        confidence=max(0.0, min(1.0, quality)),
+         # Mean predicted-class probability of the FinBERT scores in the window
+        # (uncalibrated). Data quality is reported separately in metrics["quality"].
+        confidence=max(0.0, min(1.0, float(context.get("model_confidence") or 0.0))),
         summary=summary,
         key_findings=findings,
         risks=[w for w in warnings if "Low sentiment data quality" in w or "Non-FinBERT" in w],

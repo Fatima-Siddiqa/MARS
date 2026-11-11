@@ -42,7 +42,8 @@ function toIndicators(raw: BackendAgentOutput): Indicator[] {
   const m = raw.metrics ?? {};
   const items: Array<[string, unknown]> = [
     ["Score", raw.score.toFixed(4)],
-    ["Data quality", `${Math.round(raw.confidence * 100)}%`],
+    ["Confidence", `${Math.round(raw.confidence * 100)}%`],
+    ["Data quality", typeof m.quality === "number" ? `${Math.round(m.quality * 100)}%` : undefined],
     ["Articles in window", m.articles_in_window],
     ["Effective articles", m.effective_articles],
     ["Window", typeof m.window_days === "number" ? `${m.window_days} days` : undefined],
