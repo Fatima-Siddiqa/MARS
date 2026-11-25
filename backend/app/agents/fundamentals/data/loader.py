@@ -56,6 +56,7 @@ class Snapshot:
     as_of: date
     company_type: str
     sector: str
+    sector_code: str = ""
     price: float | None = None
     price_date: date | None = None
     shares: float | None = None
@@ -65,6 +66,8 @@ class Snapshot:
     balance_date: date | None = None
     ttm: dict[str, Fact] = field(default_factory=dict)  # trailing-twelve-month flows
     ttm_method: dict[str, str] = field(default_factory=dict)
+    ytd: dict[str, Fact] = field(default_factory=dict)  # current fiscal year to date
+    annual: dict[str, list[Fact]] = field(default_factory=dict)  # last two fiscal years, oldest 1st
     warnings: list[str] = field(default_factory=list)
 
 
@@ -72,7 +75,7 @@ class Snapshot:
 
 
 def companies() -> pd.DataFrame:
-    return pd.read_csv(REFERENCE_CSV).set_index("ticker")
+    return pd.read_csv(REFERENCE_CSV, dtype={"psx_sector_code": str}).set_index("ticker")
 
 
 def _d(s) -> date | None:
@@ -244,7 +247,7 @@ def build_snapshot(ticker: str, as_of: date | None = None) -> Snapshot:
     if ticker not in meta.index:
         raise KeyError(f"{ticker} is not in the fundamentals universe")
     m = meta.loc[ticker]
-    snap = Snapshot(ticker, as_of, m["company_type"], m["sector"])
+    snap = Snapshot(ticker, as_of, m["company_type"], m["sector"], m["psx_sector_code"])
     f = facts_as_of(load_facts(), ticker, as_of)
     if f.empty:
         snap.warnings.append(f"No financial statements published by {as_of}")
@@ -275,6 +278,16 @@ def build_snapshot(ticker: str, as_of: date | None = None) -> Snapshot:
                 break
         else:
             snap.warnings.append(f"Trailing twelve-month {item} cannot be formed")
+        latest = ends[0]
+        parts = _period(flows, item, _fy_start(latest, fy_month), latest)
+        if parts:
+            src = max(parts, key=lambda p: p.published_at)
+            snap.ytd[item] = Fact(sum(p.value for p in parts), _fy_start(latest, fy_month),
+                                  latest, src.published_at, src.source, src.source_ref)
+        ann = flows[(flows["line_item"] == item) & (flows["kind"] == "annual")]
+        if len(ann):
+            snap.annual[item] = [_fact(r) for r in ann.sort_values("period_end").tail(2)
+                                 .itertuples()]
 
     px = price_on(ticker, as_of)
     if px is None:

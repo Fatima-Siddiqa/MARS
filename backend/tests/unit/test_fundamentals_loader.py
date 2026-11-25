@@ -27,7 +27,8 @@ def _keyed(item, value, kind, start, end, published, unit="PKR_thousands"):
 def data(tmp_path, monkeypatch):
     ref = tmp_path / "companies.csv"
     pd.DataFrame([{"ticker": "TST", "psx_symbol": "TST", "company_name": "Test",
-                   "company_type": "non_bank", "sector": "Cement", "fiscal_year_end_month": 12,
+                   "company_type": "non_bank", "psx_sector_code": "0804", "sector": "Cement",
+                   "fiscal_year_end_month": 12,
                    "statement_basis": "unconsolidated"}]).to_csv(ref, index=False)
     page = pd.DataFrame([
         _page("net_income", 400_000, "2025-01-01", "2025-12-31", "annual", "2026-03-01"),
