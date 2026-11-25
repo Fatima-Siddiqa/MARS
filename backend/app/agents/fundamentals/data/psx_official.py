@@ -125,23 +125,58 @@ def _session() -> requests.Session:
     return s
 
 
+def _request(session: requests.Session, method: str, url: str, **kw) -> requests.Response:
+    """GET/POST with 3 attempts and growing back-off for transient server errors (5xx)."""
+    for attempt in range(3):
+        try:
+            r = session.request(method, url, timeout=60, **kw)
+            if r.status_code < 500:
+                r.raise_for_status()
+                return r
+        except requests.ConnectionError:
+            if attempt == 2:
+                raise
+        time.sleep(5 * (attempt + 1))
+    r.raise_for_status()
+    return r
+
+
 def fetch_company_page(sym: str, session: requests.Session, today: date) -> tuple[str, Path]:
     """Download (once per day) and cache the PSX company page."""
     path = PAGES_DIR / f"{sym}_{today.isoformat()}.html"
     if not path.exists():
-        r = session.get(COMPANY_URL.format(sym=sym), timeout=60)
-        r.raise_for_status()
+        r = _request(session, "GET", COMPANY_URL.format(sym=sym))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(r.text, encoding="utf-8")
         time.sleep(REQUEST_DELAY_S)
     return path.read_text(encoding="utf-8"), path
 
 
+_PORTAL = {"failures": 0}
+PORTAL_MAX_FAILURES = 3  # consecutive failures before the portal is skipped for this run
+
+
 def fetch_portal_filings(sym: str, session: requests.Session, today: date) -> list[dict]:
+    """Filings on the PSX Financials portal; [] (not an error) if the portal is down.
+
+    After PORTAL_MAX_FAILURES consecutive failures the portal is not called again in this run,
+    so an outage on PSX's side does not turn a collection into hours of time-outs.
+    """
     path = PAGES_DIR / f"{sym}_{today.isoformat()}_portal.json"
     if not path.exists():
-        r = session.post(PORTAL_URL, data={"name": "get_comp_data", "smbCode": sym}, timeout=60)
-        r.raise_for_status()
+        if _PORTAL["failures"] >= PORTAL_MAX_FAILURES:
+            return []
+        try:
+            r = session.post(PORTAL_URL, data={"name": "get_comp_data", "smbCode": sym},
+                             timeout=20)
+            r.raise_for_status()
+            _PORTAL["failures"] = 0
+        except requests.RequestException as exc:
+            _PORTAL["failures"] += 1
+            log.warning("PSX Financials portal unavailable for %s: %s", sym, exc)
+            if _PORTAL["failures"] == PORTAL_MAX_FAILURES:
+                log.warning("PSX Financials portal skipped for the rest of this run")
+            return []
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(r.text or "[]", encoding="utf-8")
         time.sleep(REQUEST_DELAY_S)
@@ -300,10 +335,55 @@ def publication(period_end: date, kind: str, fy_end: date, anns: list[dict],
 # --- collection --------------------------------------------------------------------------------
 
 
+def infer_fy_end_month(anns: list[dict], portal: list[dict],
+                       labels: list[str] | None = None) -> tuple[int | None, str]:
+    """Fiscal year-end month from a company's own PSX filings.
+
+    1. An annual filing title ("... for the year ended June 30, 2026").
+    2. The company page's latest quarter label (e.g. "Q3 2026") must end on a date that a dated
+       PSX filing says was reported ("quarter ended ..."): only one year-end month fits.
+    3. Otherwise the quarter-end month that never appears among its quarterly portal filings
+       since 2020 (the fourth quarter is filed as the annual report, not as a quarterly one).
+    """
+    for a in anns:
+        if a["period_end"] and re.search(r"year ended|annual", a["title"], re.I):
+            return a["period_end"].month, "annual filing title"
+    quarters = [lb for lb in (labels or []) if lb.startswith("Q")]
+    reported = {a["period_end"] for a in anns if a["period_end"]}
+    if quarters and reported:
+        latest = max(quarters, key=lambda lb: (int(lb.split()[1]), int(lb[1])))
+        fits = [m for m in (3, 6, 9, 12) if fiscal_period(latest, m)[1] in reported]
+        if len(fits) == 1:
+            return fits[0], f"page label {latest} matches a dated filing"
+    counts = {3: 0, 6: 0, 9: 0, 12: 0}
+    for f in portal:
+        if f["kind"] != "quarterly":
+            continue
+        try:
+            pe = date.fromisoformat(f["period_ended"])
+            posted = date.fromisoformat(f["posting_date"])
+        except (TypeError, ValueError):
+            continue
+        if pe.year >= 2020 and posted >= pe and pe.month in counts:
+            counts[pe.month] += 1
+    missing = [m for m, n in counts.items() if n == 0]
+    if len(missing) == 1 and sum(counts.values()) >= 6:
+        return missing[0], "quarter-end month absent from quarterly filings"
+    return None, f"ambiguous quarterly filing months {counts}"
+
+
 def collect_company(c: Company, session: requests.Session, today: date) -> dict:
     html, page_path = fetch_company_page(c.psx_symbol, session, today)
     portal = fetch_portal_filings(c.psx_symbol, session, today)
     anns = parse_announcements(html)
+    fy_how = "reference"
+    if not c.fiscal_year_end_month:
+        labels = sorted({lb for lb, _, _ in parse_financials(html)})
+        month, fy_how = infer_fy_end_month(anns, portal, labels)
+        if month is None:
+            return {"rows": [], "shares": None, "filings": [], "unpublished": [],
+                    "page": str(page_path), "fy": None, "fy_how": fy_how}
+        c = Company(c.ticker, c.psx_symbol, c.company_type, month)
     retrieved = datetime.now(UTC).isoformat(timespec="seconds")
     page_url = COMPANY_URL.format(sym=c.psx_symbol)
     rows, unpublished = [], []
@@ -337,7 +417,8 @@ def collect_company(c: Company, session: requests.Session, today: date) -> dict:
                  "kind": f["kind"], "period_end": f["period_ended"], "title": "",
                  "url": f["url"]} for f in portal]
     return {"rows": rows, "shares": share_row, "filings": filings,
-            "unpublished": unpublished, "page": str(page_path)}
+            "unpublished": unpublished, "page": str(page_path),
+            "fy": c.fiscal_year_end_month, "fy_how": fy_how}
 
 
 def merge_versions(old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
@@ -362,24 +443,32 @@ def merge_versions(old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([old, add[STATEMENT_COLUMNS]], ignore_index=True)
 
 
-def collect(tickers: list[str] | None = None, today: date | None = None) -> dict:
-    today = today or date.today()
-    session = _session()
-    companies = [c for c in load_companies() if not tickers or c.ticker in tickers]
-    all_rows, shares, filings, report = [], [], [], {}
-    for c in companies:
-        try:
-            res = collect_company(c, session, today)
-        except requests.RequestException as exc:
-            report[c.ticker] = {"error": f"{type(exc).__name__}: {exc}"}
+UNIVERSE_CSV = OFFICIAL_DIR / "universe.csv"
+# Not operating companies: closed-end funds, modarabas, REITs, ETFs.
+EXCLUDED_SECTORS = {"0806", "0819", "0836", "0837"}
+
+
+def universe_companies() -> list[Company]:
+    """Every listed operating company in the latest official PSX daily file."""
+    from app.ingestion import psx_eod
+
+    days = sorted(psx_eod.EOD_DIR.glob("????-??-??.Z"))
+    if not days:
+        raise FileNotFoundError("No PSX daily files: run python -m app.ingestion.psx_eod first")
+    day = psx_eod.parse_day(days[-1])
+    known = {c.psx_symbol: c for c in load_companies()}
+    out = []
+    for r in day.itertuples():
+        code = str(r.sector_code).strip()
+        psx_sym = psx_eod.PSX_SYMBOL.get(r.symbol, r.symbol)
+        if code in EXCLUDED_SECTORS:
             continue
-        all_rows += res["rows"]
-        filings += res["filings"]
-        if res["shares"]:
-            shares.append(res["shares"])
-        listed = res["shares"]["shares_outstanding"] if res["shares"] else None
-        report[c.ticker] = {"rows": len(res["rows"]), "unpublished": res["unpublished"],
-                            "shares": listed}
+        out.append(known.get(psx_sym) or Company(
+            r.symbol, psx_sym, "bank" if code == "0807" else "non_bank", 0))
+    return out
+
+
+def _save(all_rows: list, shares: list, filings: list) -> None:
     OFFICIAL_DIR.mkdir(parents=True, exist_ok=True)
     new = pd.DataFrame(all_rows, columns=STATEMENT_COLUMNS)
     old = pd.read_csv(STATEMENTS_CSV) if STATEMENTS_CSV.exists() else new.iloc[0:0]
@@ -390,15 +479,58 @@ def collect(tickers: list[str] | None = None, today: date | None = None) -> dict
     fl_old = pd.read_csv(FILINGS_CSV) if FILINGS_CSV.exists() else pd.DataFrame()
     fl = pd.concat([fl_old, pd.DataFrame(filings)], ignore_index=True)
     fl.astype(str).drop_duplicates(["ticker", "url"]).to_csv(FILINGS_CSV, index=False)
+
+
+def collect(tickers: list[str] | None = None, today: date | None = None,
+            whole_market: bool = False, batch: int = 50) -> dict:
+    """Collect PSX company-page figures for the reference companies (default) or all of PSX."""
+    today = today or date.today()
+    session = _session()
+    pool = universe_companies() if whole_market else load_companies()
+    companies = [c for c in pool if not tickers or c.ticker in tickers]
+    all_rows, shares, filings, report, uni = [], [], [], {}, []
+    for i, c in enumerate(companies, 1):
+        try:
+            res = collect_company(c, session, today)
+        except (requests.RequestException, ValueError, AttributeError) as exc:
+            report[c.ticker] = {"error": f"{type(exc).__name__}: {exc}"}
+            continue
+        all_rows += res["rows"]
+        filings += res["filings"]
+        if res["shares"]:
+            shares.append(res["shares"])
+        listed = res["shares"]["shares_outstanding"] if res["shares"] else None
+        report[c.ticker] = {"rows": len(res["rows"]), "unpublished": res["unpublished"],
+                            "shares": listed, "fy": res["fy"], "fy_how": res["fy_how"]}
+        uni.append({"ticker": c.ticker, "psx_symbol": c.psx_symbol,
+                    "company_type": c.company_type, "fiscal_year_end_month": res["fy"],
+                    "fy_how": res["fy_how"], "rows": len(res["rows"])})
+        if i % batch == 0:
+            _save(all_rows, shares, filings)
+            all_rows, shares, filings = [], [], []
+            log.info("collected %d / %d companies", i, len(companies))
+    _save(all_rows, shares, filings)
+    if whole_market:
+        pd.DataFrame(uni).to_csv(UNIVERSE_CSV, index=False)
     return report
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Collect official PSX fundamentals")
     ap.add_argument("tickers", nargs="*")
+    ap.add_argument("--whole-market", action="store_true",
+                    help="every listed operating company (for model training and peers)")
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO)
-    for t, r in collect(a.tickers or None).items():
+    report = collect(a.tickers or None, whole_market=a.whole_market)
+    if a.whole_market:
+        ok = sum(1 for r in report.values() if r.get("rows"))
+        print(f"{ok} of {len(report)} companies with figures; see {UNIVERSE_CSV}")
+        for t, r in report.items():
+            if "error" in r or not r.get("fy"):
+                print(t, r.get("error") or r.get("fy_how"))
+        return
+    for t, r in report.items():
         print(t, r)
 
 
