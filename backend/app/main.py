@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.agents.fundamentals.api import router as fundamentals_router
 from app.api.routes import health, recommendation, tickers
 from app.api.routes.agents import macro, sentiment, technical
 from app.core.config import get_settings
@@ -22,4 +23,5 @@ app.include_router(tickers.router)
 app.include_router(technical.router)
 app.include_router(sentiment.router)
 app.include_router(macro.router)
+app.include_router(fundamentals_router)
 app.include_router(recommendation.router)

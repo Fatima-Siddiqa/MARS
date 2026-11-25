@@ -49,6 +49,7 @@ MODEL_DIR = PROCESSED / "models"
 MODEL_PATH = MODEL_DIR / "valuation_model.joblib"
 REPORT_JSON = MODEL_DIR / "valuation_report.json"
 REPORT_MD = MODEL_DIR / "valuation_report.md"
+OOS_CSV = MODEL_DIR / "oos_predictions.csv"
 MODEL_VERSION = "fundamentals-valuation-v1"
 SIMPLICITY_TOLERANCE = 0.05
 MIN_TRAIN_ROWS = 150
@@ -143,11 +144,14 @@ def walk_forward(ds: pd.DataFrame) -> dict:
     years = sorted(ds["obs_year"].unique())
     folds, pooled = [], {n: ([], []) for n in ORDER}
     residuals = {n: [] for n in ORDER}
+    oos = []  # out-of-sample predictions, used to calibrate BUY / HOLD / AVOID
     for y in years:
         train, test = ds[ds["obs_year"] < y], ds[ds["obs_year"] == y]
         if len(train) < MIN_TRAIN_ROWS or test.empty:
             continue
         fold = {"test_year": int(y), "n_train": len(train), "n_test": len(test)}
+        keep = [c for c in ("ticker", "obs_date", "obs_year", "close", TARGET) if c in test]
+        frame = test[keep].copy()
         for name in ORDER:
             m = make(name).fit(train[FEATURES], train[TARGET])
             p = m.predict(test[FEATURES])
@@ -155,9 +159,12 @@ def walk_forward(ds: pd.DataFrame) -> dict:
             pooled[name][0].extend(test[TARGET])
             pooled[name][1].extend(p)
             residuals[name].extend(np.asarray(test[TARGET]) - p)
+            frame[f"pred_{name}"] = p
         folds.append(fold)
+        oos.append(frame)
     summary = {n: _metrics(*pooled[n]) for n in ORDER if pooled[n][0]}
-    return {"folds": folds, "pooled": summary, "residuals": residuals}
+    return {"folds": folds, "pooled": summary, "residuals": residuals,
+            "oos": pd.concat(oos, ignore_index=True) if oos else pd.DataFrame()}
 
 
 def choose(ev: dict) -> tuple[str, str]:
@@ -228,6 +235,11 @@ def train(rebuild_dataset: bool = True) -> dict:
         },
         MODEL_PATH,
     )
+    if not ev["oos"].empty:
+        oos = ev["oos"].copy()
+        oos["pred"] = oos[f"pred_{chosen}"]
+        oos["gap_log"] = oos["pred"] - oos[TARGET]  # >0: valued below what fundamentals imply
+        oos.to_csv(OOS_CSV, index=False)
     REPORT_JSON.write_text(json.dumps(report, indent=2))
     REPORT_MD.write_text(render_md(report))
     return report

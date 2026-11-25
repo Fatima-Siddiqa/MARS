@@ -15,10 +15,15 @@ def test_tickers_lookup():
 
 
 def test_recommendation_degrades_gracefully_with_stub_agents(tmp_path, monkeypatch):
-    # MEBL has no xlsx price file; hide any locally refreshed official PSX prices too.
+    # MEBL has no xlsx price file; hide any locally refreshed official PSX prices and
+    # fundamentals too, so every agent has no data (as in CI).
+    from app.agents.fundamentals.data import loader
     from app.ingestion import psx_eod
 
     monkeypatch.setattr(psx_eod, "EOD_DIR", tmp_path)
+    monkeypatch.setattr(loader, "KEYED_CSV", tmp_path / "none.csv")
+    monkeypatch.setattr(loader, "STATEMENTS_CSV", tmp_path / "none.csv")
+    monkeypatch.setattr(loader, "UNIVERSE_CSV", tmp_path / "none.csv")
     body = client.get("/recommendation/MEBL").json()
     assert body["call"] == "HOLD"
     assert len(body["agent_outputs"]) == 6

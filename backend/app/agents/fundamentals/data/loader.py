@@ -33,10 +33,12 @@ from app.agents.fundamentals.data.psx_official import (
     REFERENCE_CSV,
     SHARES_CSV,
     STATEMENTS_CSV,
+    UNIVERSE_CSV,
 )
 from app.ingestion import psx_eod
 
 KEYED_CSV = OFFICIAL_DIR / "keyed_statements.csv"
+SECTORS_CSV = REFERENCE_CSV.parent / "psx_sectors.csv"
 DOC_URL = "https://dps.psx.com.pk/download/document/{doc_id}.pdf#page={page}"
 
 
@@ -74,8 +76,35 @@ class Snapshot:
 # --- loading ------------------------------------------------------------------------------------
 
 
+@lru_cache(maxsize=2)
+def _companies_cached(ref_mtime: float, uni_mtime: float) -> pd.DataFrame:
+    ref = pd.read_csv(REFERENCE_CSV, dtype={"psx_sector_code": str})
+    ref["coverage"] = "filed statements + PSX page"
+    frames = [ref]
+    if UNIVERSE_CSV.exists():
+        uni = pd.read_csv(UNIVERSE_CSV).dropna(subset=["fiscal_year_end_month"])
+        uni = uni[~uni["ticker"].isin(ref["ticker"]) & (uni["rows"] > 0)]
+        names = pd.read_csv(SECTORS_CSV, dtype={"sector_code": str}).set_index("sector_code")
+        codes = {}
+        for t in uni["ticker"]:
+            df = psx_eod.load_symbol(t)
+            if df is not None:
+                codes[t] = str(int(df["sector_code"].iloc[-1])).zfill(4)
+        uni["psx_sector_code"] = uni["ticker"].map(codes)
+        uni = uni.dropna(subset=["psx_sector_code"])
+        uni["sector"] = uni["psx_sector_code"].map(names["sector_name"])
+        uni["fiscal_year_end_month"] = uni["fiscal_year_end_month"].astype(int)
+        uni["coverage"] = "PSX page only (no filed balance sheet)"
+        frames.append(uni)
+    cols = ["ticker", "psx_symbol", "company_type", "psx_sector_code", "sector",
+            "fiscal_year_end_month", "coverage"]
+    return pd.concat([f[cols] for f in frames], ignore_index=True).set_index("ticker")
+
+
 def companies() -> pd.DataFrame:
-    return pd.read_csv(REFERENCE_CSV, dtype={"psx_sector_code": str}).set_index("ticker")
+    """Reference companies (with filed statements) plus the PSX-wide universe, if collected."""
+    mt = lambda p: p.stat().st_mtime if p.exists() else 0.0  # noqa: E731
+    return _companies_cached(mt(REFERENCE_CSV), mt(UNIVERSE_CSV))
 
 
 def _d(s) -> date | None:
@@ -211,10 +240,18 @@ def price_on(ticker: str, as_of: date) -> tuple[float, date] | None:
     return float(df["close"].iloc[-1]), df.index[-1].date()
 
 
+@lru_cache(maxsize=1)
+def _shares_cached(mtime: float) -> pd.DataFrame:
+    return pd.read_csv(SHARES_CSV) if SHARES_CSV.exists() else pd.DataFrame(
+        columns=["ticker", "as_of", "shares_outstanding", "face_value"])
+
+
+def _shares_table() -> pd.DataFrame:
+    return _shares_cached(SHARES_CSV.stat().st_mtime if SHARES_CSV.exists() else 0.0)
+
+
 def _face_value(ticker: str) -> float | None:
-    if not SHARES_CSV.exists():
-        return None
-    sh = pd.read_csv(SHARES_CSV)
+    sh = _shares_table()
     sh = sh[sh["ticker"] == ticker].sort_values("as_of")
     if sh.empty or pd.isna(sh["face_value"].iloc[-1]):
         return None
@@ -228,8 +265,8 @@ def shares_on(f: pd.DataFrame, ticker: str, as_of: date) -> tuple[float, str] | 
     if len(cap) and face:
         row = cap.iloc[-1]
         return row.value * 1e6 / face, f"share capital {row.period_end} / face value Rs {face:g}"
-    if SHARES_CSV.exists():
-        sh = pd.read_csv(SHARES_CSV)
+    sh = _shares_table()
+    if len(sh):
         sh = sh[(sh["ticker"] == ticker) & (pd.to_datetime(sh["as_of"]).dt.date <= as_of)]
         if len(sh):
             r = sh.sort_values("as_of").iloc[-1]
@@ -277,7 +314,8 @@ def build_snapshot(ticker: str, as_of: date | None = None) -> Snapshot:
                 snap.ttm[item], snap.ttm_method[item] = res
                 break
         else:
-            snap.warnings.append(f"Trailing twelve-month {item} cannot be formed")
+            if item in ("net_income", "revenue", "total_income"):  # others use year-to-date
+                snap.warnings.append(f"Trailing twelve-month {item} cannot be formed")
         latest = ends[0]
         parts = _period(flows, item, _fy_start(latest, fy_month), latest)
         if parts:

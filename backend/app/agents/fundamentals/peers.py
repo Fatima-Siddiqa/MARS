@@ -49,12 +49,24 @@ class Baseline:
     reason: str | None = None
 
 
-def universe(as_of: date) -> dict[str, tuple[Snapshot, list[Ratio]]]:
+def universe(as_of: date, sector_code: str | None = None,
+             company_type: str | None = None) -> dict[str, tuple[Snapshot, list[Ratio]]]:
+    """Snapshots + ratios for every known company (optionally one sector / type only)."""
+    meta = companies()
+    if sector_code is not None:
+        meta = meta[meta["psx_sector_code"] == sector_code]
+    if company_type is not None:
+        meta = meta[meta["company_type"] == company_type]
     out = {}
-    for t in companies().index:
+    for t in meta.index:
         s = build_snapshot(t, as_of)
         out[t] = (s, compute_ratios(s))
     return out
+
+
+def peer_universe(target: Snapshot) -> dict[str, tuple[Snapshot, list[Ratio]]]:
+    """The target's own sector and company type (all of PSX if the universe was collected)."""
+    return universe(target.as_of, target.sector_code, target.company_type)
 
 
 def compare(target: Snapshot, uni: dict[str, tuple[Snapshot, list[Ratio]]]) -> PeerResult:

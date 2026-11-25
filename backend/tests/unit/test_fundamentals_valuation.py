@@ -86,6 +86,7 @@ def test_value_scales_by_index_and_explains(tmp_path, monkeypatch):
     monkeypatch.setattr(train, "MODEL_PATH", tmp_path / "m.joblib")
     monkeypatch.setattr(train, "REPORT_JSON", tmp_path / "r.json")
     monkeypatch.setattr(train, "REPORT_MD", tmp_path / "r.md")
+    monkeypatch.setattr(train, "OOS_CSV", tmp_path / "oos.csv")
     monkeypatch.setattr(train, "build_training_set", lambda: ds)
     rep = train.train()
     assert rep["chosen"] in {"ridge", "gbm"} and (tmp_path / "r.md").exists()
