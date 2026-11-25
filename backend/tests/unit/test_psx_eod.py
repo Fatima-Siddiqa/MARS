@@ -25,7 +25,6 @@ def _zip(text: str) -> bytes:
 @pytest.fixture
 def eod_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(psx_eod, "EOD_DIR", tmp_path)
-    monkeypatch.setattr(psx_eod, "EOD_CSV", tmp_path / "eod.csv")
     return tmp_path
 
 
@@ -72,7 +71,7 @@ def test_load_stock_appends_official_rows_after_xlsx_end(eod_dir, tmp_path, monk
     hist.to_csv(price_dir / "HBL.csv", index=False)
     monkeypatch.setattr(prices, "PRICE_DIR", price_dir)
     (eod_dir / "2026-11-24.Z").write_bytes(_zip(LIS))
-    psx_eod.parse_day(eod_dir / "2026-11-24.Z").to_csv(eod_dir / "eod.csv", index=False)
+    psx_eod._write([psx_eod.parse_day(eod_dir / "2026-11-24.Z")])
 
     df = prices.load_stock("HBL")
     assert list(df.index.date) == [date(2026, 11, 20), date(2026, 11, 23), date(2026, 11, 24)]

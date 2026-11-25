@@ -278,6 +278,22 @@ def publication(period_end: date, kind: str, fy_end: date, anns: list[dict],
                 continue
             if posted >= period_end:  # sanity: cannot be published before the period ends
                 return posted, "PSX Financials portal posting date", f["url"]
+    # No filing found for this period. Accounts are filed in order, so the first PSX filing for
+    # a LATER period is an upper bound on when this one was public. Using it can only make the
+    # figure available later than it really was (never earlier), so there is no look-ahead.
+    later = [(a["filed"], a["url"]) for a in anns
+             if a["period_end"] and a["period_end"] > period_end and a["filed"] >= period_end]
+    for f in portal:
+        try:
+            pe = date.fromisoformat(f["period_ended"])
+            posted = date.fromisoformat(f["posting_date"])
+        except (TypeError, ValueError):
+            continue
+        if period_end < pe <= posted:
+            later.append((posted, f["url"]))
+    if later:
+        filed, url = min(later)
+        return filed, "upper bound: first PSX filing for a later period", url
     return None
 
 

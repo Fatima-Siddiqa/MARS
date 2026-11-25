@@ -7,7 +7,7 @@ No third-party (e.g. Yahoo) data is used. Everything below lives in `data/raw/` 
 
 | Data | PSX source | How it is collected | Stored in |
 |---|---|---|---|
-| Daily prices (OHLCV) | PSX Data Portal, daily market summary `dps.psx.com.pk/download/mkt_summary/YYYY-MM-DD.Z` | `python -m app.ingestion.psx_eod` | `data/raw/psx_eod/` |
+| Daily prices (OHLCV) | PSX Data Portal, daily market summary `dps.psx.com.pk/download/mkt_summary/YYYY-MM-DD.Z` | `python -m app.ingestion.psx_eod` | `data/raw/psx_eod/symbols/{SYMBOL}.csv` (listed companies only) |
 | Annual + quarterly revenue / mark-up, total income, profit after tax, EPS | PSX company page, Financials tab `dps.psx.com.pk/company/{SYMBOL}` | `python -m app.agents.fundamentals.data.psx_official` | `data/raw/fundamentals/official/psx_statements.csv` |
 | Shares outstanding, face value | PSX company page, Equity Profile | same | `.../psx_shares.csv` |
 | Filing dates (publication dates) | PSX company page Announcements + PSX Financials portal `financials.psx.com.pk` | same | `.../psx_filings.csv` |
@@ -19,7 +19,9 @@ No third-party (e.g. Yahoo) data is used. Everything below lives in `data/raw/` 
   standalone, so equity, profit and ratios all use the same basis.
 - **Point in time.** Every figure carries `published_at`, the date of the PSX filing that first
   made it public (results announcement, else report transmission, else Financials-portal posting
-  date). A figure whose filing date cannot be found on PSX is not used.
+  date). If no filing for that period exists on PSX, the date of the first PSX filing for a *later*
+  period is used: accounts are filed in order, so this can only make a figure visible later than it
+  really was, never earlier (labelled "upper bound" in `published_via`). Otherwise it is not used.
 - **Restatements never overwrite.** A changed figure is stored as a new version, dated the day it
   was first observed.
 - **Missing is not zero.** A "-" on PSX stays missing.
@@ -48,8 +50,10 @@ agent uses new figures. It checks:
 - Known conflict: PTCL Q3 2026 profit on the PSX company page (-1,403,639) disagrees with the filed
   report (-671,157). The company page's own EPS (-0.13) matches the report, and a PTCL results
   announcement for that quarter was revoked, so the report figure is used.
-- Gaps (no PSX publication date found, so not used): HBL annual figures 2022-2025, PPL Q1 FY2026,
-  SYS Q1 2026, ENGROH 2022-2023.
+- Dated by the upper-bound rule (no own filing on PSX): HBL annual figures 2022-2025, PPL Q1
+  FY2026, SYS Q1 2026, ENGROH 2022-2023.
+- Check of the data layer: HBL trailing P/E on 2026-11-26 computes to 6.68, equal to the
+  "P/E Ratio (TTM)" shown on the PSX company page.
 
 ## Refreshing
 

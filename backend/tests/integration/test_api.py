@@ -18,7 +18,7 @@ def test_recommendation_degrades_gracefully_with_stub_agents(tmp_path, monkeypat
     # MEBL has no xlsx price file; hide any locally refreshed official PSX prices too.
     from app.ingestion import psx_eod
 
-    monkeypatch.setattr(psx_eod, "EOD_CSV", tmp_path / "missing.csv")
+    monkeypatch.setattr(psx_eod, "EOD_DIR", tmp_path)
     body = client.get("/recommendation/MEBL").json()
     assert body["call"] == "HOLD"
     assert len(body["agent_outputs"]) == 6

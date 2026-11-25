@@ -59,7 +59,10 @@ def test_publication_prefers_results_then_report_then_portal():
                "url": "bad"}]  # posted before the period ended: impossible, ignored
     assert po.publication(date(2026, 3, 31), "quarter", date(2026, 6, 30), [], portal)[0] == \
         date(2026, 4, 28)
-    assert po.publication(date(2025, 12, 31), "quarter", date(2026, 6, 30), [], portal) is None
+    # No valid filing for Dec 2025: bounded by the first filing for a later period (never earlier)
+    bounded = po.publication(date(2025, 12, 31), "quarter", date(2026, 6, 30), [], portal)
+    assert bounded[0] == date(2026, 4, 28) and bounded[1].startswith("upper bound")
+    assert po.publication(date(2026, 9, 30), "quarter", date(2027, 6, 30), [], portal) is None
 
 
 def _row(value, retrieved="2026-11-26T10:00:00+00:00"):
