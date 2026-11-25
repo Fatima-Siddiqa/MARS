@@ -154,6 +154,8 @@ def check_new_filings(k: pd.DataFrame) -> list[str]:
     is_date = f["period_end"].str.match(r"\d{4}-\d{2}-\d{2}", na=False)
     dated = is_date & (f["period_end"] <= f["filed"])
     f = f[(f["source"] == "company page") & dated & ~f["title"].str.contains("REVOKED", na=False)]
+    reference = {c.ticker for c in load_companies()}  # balance sheets are keyed for these
+    f = f[f["ticker"].isin(reference)]
     latest_filed = f.groupby("ticker")["period_end"].max()
     keyed = k[k["period_kind"] == "instant"].groupby("ticker")["period_end"].max()
     out = []
