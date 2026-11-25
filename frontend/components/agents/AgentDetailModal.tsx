@@ -60,7 +60,7 @@ export default function AgentDetailModal({ agent, data, onClose }: Props) {
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Current finding</div>
               <div className="mt-1 flex items-center gap-2 text-sm">
-                <span className={`rounded-md border px-2.5 py-0.5 text-xs font-bold ${SIGNAL_BADGE[data.signal]}`}>{SIGNAL_LABEL[data.signal]}</span>
+                <span className={`rounded-md border px-2.5 py-0.5 text-xs font-bold ${SIGNAL_BADGE[data.signal]}`}>{data.call ?? SIGNAL_LABEL[data.signal]}</span>
                 <span className="text-slate-500">
                   Weight in Regime: <b className="text-slate-800">{agent.weight}%</b>
                 </span>

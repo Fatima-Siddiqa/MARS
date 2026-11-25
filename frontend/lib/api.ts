@@ -121,9 +121,61 @@ function adaptMacro(raw: BackendAgentOutput): AgentOutput {
   };
 }
 
+const fmtPct = (v: unknown) => (typeof v === "number" ? `${(v * 100).toFixed(1)}%` : undefined);
+const fmtRs = (v: unknown) => (typeof v === "number" ? `Rs ${v.toFixed(2)}` : undefined);
+const fmtX = (v: unknown) => (typeof v === "number" ? `${v.toFixed(2)}x` : undefined);
+
+// Fundamentals agent (official PSX data + trained valuation model). The BUY / HOLD / AVOID call
+// is in metrics.call; stance carries the same decision.
+function adaptFundamentals(raw: BackendAgentOutput): AgentOutput {
+  if (raw.status !== "ok" && raw.status !== "degraded") {
+    throw new Error((raw.warnings ?? []).join("; ") || raw.summary || `Fundamentals agent status: ${raw.status}`);
+  }
+  const m = (raw.metrics ?? {}) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const ratio = (name: string) => (m.ratios ?? []).find((r: { name: string }) => r.name === name);
+  const v = m.valuation ?? {};
+  const items: Array<[string, string | undefined]> = [
+    ["Call", m.call],
+    ["Fair value / share", fmtRs(v.implied_value_per_share ?? m.peer_baseline?.implied_value_per_share)],
+    ["Price", fmtRs(m.market?.price)],
+    ["Valuation gap", fmtPct(m.gap)],
+    ["P/E (TTM)", fmtX(ratio("pe")?.value)],
+    ["P/B", fmtX(ratio("pb")?.value)],
+    ["ROE", fmtPct(ratio("roe")?.value)],
+    ["Peers", m.peers ? `${m.peers.peers.length} (${m.peers.strength})` : undefined],
+    ["Valued by", m.gap_source],
+  ];
+  return {
+    agent: "fundamentals",
+    ticker: raw.ticker,
+    signal: raw.stance,
+    call: m.call,
+    score: raw.score,
+    confidence: raw.confidence,
+    summary: raw.summary,
+    rationale: (raw.key_findings ?? []).join("\n") || raw.summary,
+    indicators: items.filter(([, val]) => val !== undefined).map(([label, value]) => ({ label, value: value as string })),
+    evidence: (raw.evidence ?? []).map((ev) => ({
+      title: ev.claim,
+      source: ev.source_name,
+      ...(ev.source_url ? { url: ev.source_url } : {}),
+    })),
+    generated_at: raw.as_of,
+    risks: raw.risks,
+    warnings: raw.warnings,
+  };
+}
+
+export async function fetchFundamentals(ticker: string, signal?: AbortSignal): Promise<AgentOutput> {
+  const res = await fetch(`${API_BASE}/agents/fundamentals/${encodeURIComponent(ticker)}`, { signal });
+  if (!res.ok) throw new Error(`Fundamentals API request failed (${res.status})`);
+  return adaptFundamentals((await res.json()) as BackendAgentOutput);
+}
+
 export async function fetchAgent(agent: AgentId, ticker: string, signal?: AbortSignal): Promise<AgentOutput> {
   // The technical agent is wired to the real backend.
   if (agent === "technical" && !TECH_MOCK) return fetchTechnical(ticker, signal);
+  if (agent === "fundamentals" && !USE_MOCK) return fetchFundamentals(ticker, signal);
   if (agent === "macro" && !USE_MOCK) {
     const res = await fetch(`${API_BASE}/agents/macro/${encodeURIComponent(ticker)}`, { signal });
     if (!res.ok) throw new Error(`Macro API request failed (${res.status})`);

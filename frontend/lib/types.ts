@@ -58,6 +58,8 @@ export type AgentOutput = {
   families?: Record<string, number | null>;
   risks?: string[];
   warnings?: string[];
+  /** Fundamentals agent: BUY / HOLD / AVOID (stance carries the same decision). */
+  call?: "BUY" | "HOLD" | "AVOID";
 };
 
 export type AgentState =

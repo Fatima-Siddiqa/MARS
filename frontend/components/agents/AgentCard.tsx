@@ -48,7 +48,7 @@ export default function AgentCard({ agent, state, onRetry, onOpen }: Props) {
           )}
           {data && (
             <span className={`${pill} ${SIGNAL_BADGE[data.signal]}`}>
-              {SIGNAL_LABEL[data.signal]}
+              {data.call ?? SIGNAL_LABEL[data.signal]}
             </span>
           )}
           <span className="font-mono text-[10px] text-slate-400">
