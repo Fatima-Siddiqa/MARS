@@ -243,8 +243,8 @@ def train(rebuild_dataset: bool = True) -> dict:
         oos["pred"] = oos[f"pred_{chosen}"]
         oos["gap_log"] = oos["pred"] - oos[TARGET]  # >0: valued below what fundamentals imply
         oos.to_csv(OOS_CSV, index=False)
-    REPORT_JSON.write_text(json.dumps(report, indent=2))
-    REPORT_MD.write_text(render_md(report))
+    REPORT_JSON.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    REPORT_MD.write_text(render_md(report), encoding="utf-8")
     return report
 
 

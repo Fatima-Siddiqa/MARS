@@ -21,7 +21,7 @@ _agent = FundamentalsAgent()
 @router.get("/model")
 def model_report() -> dict:
     """Training/test report of the valuation model and the BUY/HOLD/AVOID calibration."""
-    report = json.loads(REPORT_JSON.read_text()) if REPORT_JSON.exists() else None
+    report = json.loads(REPORT_JSON.read_text(encoding="utf-8")) if REPORT_JSON.exists() else None
     return {"model": report, "calibration": load_calibration()}
 
 

@@ -119,7 +119,7 @@ def symbol_path(symbol: str) -> Path:
 
 def _status() -> dict:
     p = EOD_DIR / "status.json"
-    return json.loads(p.read_text()) if p.exists() else {}
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
 
 
 def _write(frames: list[pd.DataFrame]) -> None:
@@ -138,7 +138,7 @@ def _write(frames: list[pd.DataFrame]) -> None:
     st = _status()
     if last > st.get("last_date", ""):
         st["last_date"] = last
-    (EOD_DIR / "status.json").write_text(json.dumps(st))
+    (EOD_DIR / "status.json").write_text(json.dumps(st), encoding="utf-8")
 
 
 def refresh(since: date | None = None, until: date | None = None, flush_every: int = 40) -> dict:

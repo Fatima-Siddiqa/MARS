@@ -55,15 +55,25 @@ agent uses new figures. It checks:
 - Check of the data layer: HBL trailing P/E on 2026-11-26 computes to 6.68, equal to the
   "P/E Ratio (TTM)" shown on the PSX company page.
 
-## Refreshing
+## Refreshing (automatic)
+
+The Windows scheduled task "MARS fundamentals refresh" runs every day at 19:00:
 
 ```bash
 cd backend
-python -m app.ingestion.psx_eod                              # prices up to the latest trading day
-python -m app.agents.fundamentals.data.psx_official          # company-page figures, shares, filings
-python -m app.agents.fundamentals.data.validate_official     # checks + which filings need keying
+python -m app.agents.fundamentals.pipeline          # what the task runs; --full re-collects all of PSX
 ```
 
-When `needs_keying` lists a company, download its new report from PSX into
-`data/raw/fundamentals/official/pdfs/`, key the balance-sheet and year-to-date lines into
-`keyed_statements.csv` (with `doc_id` and `doc_page`), and re-run the validator.
+It refreshes prices, the reference companies' PSX pages (the whole market weekly), reads any new
+filings automatically, validates everything, and retrains/recalibrates the model when new annual
+figures arrive. Each run appends a line to `data/processed/fundamentals/refresh_log.jsonl`.
+
+**Automatic reading of new filings** (`data/auto_extract.py`): text PDFs are read directly, scanned
+PDFs with Tesseract OCR. A figure is only added to `keyed_statements.csv` (extraction `auto_text` /
+`auto_ocr`) if it passes arithmetic checks: assets = liabilities + equity on independently read
+totals, equity = sum of its components, share capital consistent with the PSX share count, and
+year-to-date profit / revenue = sum of the PSX company-page quarters. Anything else goes to
+`review_queue.csv` with the reason; key those by hand (with `doc_id` and `doc_page`) and re-run
+`python -m app.agents.fundamentals.data.validate_official`.
+
+Accuracy check against the hand-keyed values: `python -m app.agents.fundamentals.data.auto_extract --check`.

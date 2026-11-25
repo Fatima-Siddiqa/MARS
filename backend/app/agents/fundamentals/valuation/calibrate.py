@@ -125,7 +125,7 @@ def calibrate() -> dict:
 
 def _save(out: dict) -> dict:
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    CALIBRATION_JSON.write_text(json.dumps(out, indent=2))
+    CALIBRATION_JSON.write_text(json.dumps(out, indent=2), encoding="utf-8")
     lines = [
         "# BUY / HOLD / AVOID calibration",
         "",
@@ -161,13 +161,13 @@ def _save(out: dict) -> dict:
         "over 40% (probable bonus issue / split) are excluded.",
         "",
     ]
-    CALIBRATION_MD.write_text("\n".join(lines))
+    CALIBRATION_MD.write_text("\n".join(lines), encoding="utf-8")
     return out
 
 
 def load_calibration() -> dict:
     if CALIBRATION_JSON.exists():
-        return json.loads(CALIBRATION_JSON.read_text())
+        return json.loads(CALIBRATION_JSON.read_text(encoding="utf-8"))
     return {"threshold": DEFAULT_T, "supported": False, "reason": "not calibrated yet"}
 
 

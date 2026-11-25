@@ -24,9 +24,17 @@ python -m scripts.run_technical HBL [--as-of 2026-07-14] [--chart]   # run one a
 python -m scripts.technical_eval             # technical walk-forward evaluation
 python -m app.agents.sentiment.newsagent.pipeline --help   # news collect -> FinBERT score pipeline
 python -m app.ingestion.psx_eod                            # refresh official PSX daily prices
-python -m app.agents.fundamentals.data.psx_official        # official PSX fundamentals
+python -m app.agents.fundamentals.data.psx_official        # official PSX fundamentals (--whole-market)
 python -m app.agents.fundamentals.data.validate_official   # must report "ok": true
+python -m app.agents.fundamentals.pipeline                 # full daily refresh (scheduled 19:00)
+python -m app.agents.fundamentals.valuation.train          # retrain valuation model + test report
+python -m app.agents.fundamentals.valuation.calibrate      # recalibrate BUY/HOLD/AVOID threshold
+python -m app.agents.fundamentals.data.auto_extract --check  # auto-reader accuracy vs keyed values
 ```
+
+The fundamentals auto-reader needs `pdftotext`/`pdftoppm` (poppler) and Tesseract OCR
+(`C:\Program Files\Tesseract-OCR`). Write files with `encoding="utf-8"`: the Windows default (cp1252)
+corrupts non-ASCII characters.
 
 Frontend (run from `frontend/`): `npm run dev` (:3000), `npm run lint`, `npm run build`. CI runs
 `npm ci && npm run lint && npm run build`. There is no frontend test runner configured.
@@ -68,12 +76,14 @@ regime-aware synthesis. LangGraph orchestration (`app/orchestration/`) is planne
 - `macro/`: built as a thin HTTP adapter. The real logic is the standalone `agents/macro/` package
   (repo root, its own pyproject/tests), served on `MACRO_AGENT_URL` (default `http://localhost:8010`).
   If that service is not running, the macro agent degrades instead of failing.
-- `fundamentals/`: being rebuilt from scratch on `aneeqa/fundamentals-agent`. The target design is in
-  `docs/fundamentals_agent.md`; data comes only from PSX (`docs/fundamentals_data.md`): standalone
-  statements, `published_at` from dated PSX filings, balance sheets keyed from filing PDFs and checked by
-  `data/validate_official.py`. Company metadata (PSX symbol, bank/non-bank, fiscal year-end) is in
-  `fundamentals/reference/companies.csv`. An earlier, unverified draft is kept for reference on the
-  `wip/fundamentals-agent` branch (`git show wip/fundamentals-agent:<path>`). Do not merge that branch.
+- `fundamentals/`: built on `aneeqa/fundamentals-agent` (design + results: `docs/fundamentals_agent.md`;
+  data: `docs/fundamentals_data.md`). Official PSX data only: standalone statements, `published_at`
+  from dated PSX filings, point-in-time snapshots (`data/loader.py`), ratios, PSX-wide sector peers, a
+  gradient-boosted valuation model trained on all PSX companies (`valuation/`, target = log market cap
+  minus the market median log P/E) and a BUY/HOLD/AVOID call calibrated on later returns. The call is in
+  `metrics["call"]`; stance/score/confidence carry the same decision. Model and data live in the
+  git-ignored `data/` folder (rebuild with the pipeline). Do not merge the old `wip/fundamentals-agent`
+  branch (unverified draft).
 - `fx/`, `forensics/`: stubs that raise `NotImplementedError`.
 
 **Backend services:**
@@ -87,8 +97,9 @@ so the agents that read local files need the files copied in by hand.
 **Frontend** (Next.js 16 App Router, React 19, Tailwind 4):
 - `lib/useAgents.ts` fetches each agent independently; every card has its own loading, error and retry state.
 - `lib/api.ts` `fetchAgent()` decides, per agent, whether to call the live backend or `data/mock.ts`.
-  Technical, sentiment and macro are live (macro and sentiment are mocked when `NEXT_PUBLIC_USE_MOCK=true`);
-  the rest are mocked.
+  Technical, sentiment, macro and fundamentals are live (all but technical are mocked when
+  `NEXT_PUBLIC_USE_MOCK=true`); fx and forensics are mocked. The company page also shows
+  `components/fundamentals/FundamentalsPanel.tsx` (reads `/agents/fundamentals/{ticker}/analysis`).
 - Each live agent needs an adapter that maps the backend `AgentOutput` to the UI `AgentOutput` in
   `lib/types.ts` (see `lib/technical-adapter.ts`).
 - `NEXT_PUBLIC_*` flags (`USE_MOCK`, `USE_MOCK_TECHNICAL`, `TECH_AS_OF`) are documented in
