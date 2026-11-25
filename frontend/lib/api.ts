@@ -1,5 +1,6 @@
 import { mockOutput } from "@/data/mock";
-import type { AgentId, AgentOutput } from "./types";
+import { adaptTechnical, type BackendTechnical } from "./technical-adapter";
+import type { AgentId, AgentOutput, Indicator, Signal } from "./types";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
 const LIVE_SENTIMENT = process.env.NEXT_PUBLIC_LIVE_SENTIMENT !== "false";
@@ -94,47 +95,27 @@ function adaptSentiment(raw: BackendAgentOutput): AgentOutput {
   };
 }
 
-// Shape the backend actually returns (the team's agent contract).
-type BackendOutput = {
-  agent: AgentId;
-  ticker: string;
-  as_of?: string;
-  status?: "ok" | "degraded" | "unavailable";
-  stance: Signal;
-  score: number;
-  confidence: number;
-  summary?: string;
-  key_findings?: string[];
-  risks?: string[];
-  evidence?: {
-    claim: string;
-    source_name?: string;
-    source_url?: string;
-    retrieved_at?: string;
-  }[];
-  metrics?: { indicators?: { label: string; value: string }[] };
-  warnings?: string[];
-};
-
-function toAgentOutput(raw: BackendOutput): AgentOutput {
-  const rationale = [
-    ...(raw.key_findings ?? []),
-    ...(raw.risks ?? []).map((r) => `Risk: ${r}`),
-  ].join("\n");
+// Macro adapter (from Mariam's 52fa21e, lost in merge 4341b86). Needs the macro service running
+// (`macro-agent serve --port 8010`); otherwise the card shows the backend's "not reachable" warning.
+function adaptMacro(raw: BackendAgentOutput): AgentOutput {
+  if (raw.status !== "ok" && raw.status !== "degraded") {
+    throw new Error(raw.warnings?.[0] ?? `Macro agent ${raw.status}`);
+  }
+  const rationale = [...(raw.key_findings ?? []), ...(raw.risks ?? []).map((r) => `Risk: ${r}`)].join("\n");
+  const indicators = (raw.metrics as { indicators?: Indicator[] } | undefined)?.indicators;
   return {
-    agent: raw.agent,
+    agent: "macro",
     ticker: raw.ticker,
     signal: raw.stance,
     score: raw.score,
     confidence: raw.confidence,
     summary: raw.summary,
     rationale: rationale || undefined,
-    indicators: raw.metrics?.indicators,
+    indicators,
     evidence: (raw.evidence ?? []).map((e) => ({
       title: e.claim,
-      url: e.source_url,
       source: e.source_name,
-      date: e.retrieved_at?.slice(0, 10),
+      ...(e.source_url ? { url: e.source_url } : {}),
     })),
     generated_at: raw.as_of,
   };
@@ -143,6 +124,11 @@ function toAgentOutput(raw: BackendOutput): AgentOutput {
 export async function fetchAgent(agent: AgentId, ticker: string, signal?: AbortSignal): Promise<AgentOutput> {
   // The technical agent is wired to the real backend.
   if (agent === "technical" && !TECH_MOCK) return fetchTechnical(ticker, signal);
+  if (agent === "macro" && !USE_MOCK) {
+    const res = await fetch(`${API_BASE}/agents/macro/${encodeURIComponent(ticker)}`, { signal });
+    if (!res.ok) throw new Error(`Macro API request failed (${res.status})`);
+    return adaptMacro((await res.json()) as BackendAgentOutput);
+  }
   // The sentiment agent is live; other specialist agents remain on demo data until implemented.
   if (USE_MOCK || agent !== "sentiment" || !LIVE_SENTIMENT) {
     await sleep(800 + Math.random() * 1400, signal);
@@ -151,8 +137,10 @@ export async function fetchAgent(agent: AgentId, ticker: string, signal?: AbortS
     return mockOutput(agent, ticker);
   }
 
-  // Confirm the exact URL/params with Fatima's FastAPI skeleton.
-  const res = await fetch(`${API_BASE}/agents/${agent}?ticker=${encodeURIComponent(ticker)}`, { signal });
-  if (!res.ok) throw new Error(`Request failed (${res.status})`);
-  return (await res.json()) as AgentOutput;
+  const res = await fetch(`${API_BASE}/agents/sentiment/${encodeURIComponent(ticker)}`, { signal });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Sentiment API request failed (${res.status})${detail ? `: ${detail}` : ""}`);
+  }
+  return adaptSentiment((await res.json()) as BackendAgentOutput);
 }
