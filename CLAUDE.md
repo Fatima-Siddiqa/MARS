@@ -23,6 +23,9 @@ alembic revision --autogenerate -m "msg" && alembic upgrade head
 python -m scripts.run_technical HBL [--as-of 2026-07-14] [--chart]   # run one agent from CLI
 python -m scripts.technical_eval             # technical walk-forward evaluation
 python -m app.agents.sentiment.newsagent.pipeline --help   # news collect -> FinBERT score pipeline
+python -m app.ingestion.psx_eod                            # refresh official PSX daily prices
+python -m app.agents.fundamentals.data.psx_official        # official PSX fundamentals
+python -m app.agents.fundamentals.data.validate_official   # must report "ok": true
 ```
 
 Frontend (run from `frontend/`): `npm run dev` (:3000), `npm run lint`, `npm run build`. CI runs
@@ -55,8 +58,9 @@ The baseline is kept permanently as the fallback and as the evaluation baseline 
 regime-aware synthesis. LangGraph orchestration (`app/orchestration/`) is planned but not built.
 
 **Agent status:**
-- `technical/`: built. Reads PSX OHLCV xlsx from `data/raw/stocks/` and KSE-100 csv via
-  `app/ingestion/prices.py` (override with `MARS_PRICE_DIR` / `MARS_BENCHMARK_PATH`). Supports `as_of`.
+- `technical/`: built. Reads PSX OHLCV via `app/ingestion/prices.py`: the FYP xlsx files in
+  `data/raw/stocks/` (adjusted, end mid-2026), extended with official unadjusted PSX daily closes from
+  `app/ingestion/psx_eod.py` (`data/raw/psx_eod/eod.csv`). Supports `as_of`.
 - `sentiment/`: built. `sentiment/agent.py` is the `AgentOutput` adapter; `sentiment/newsagent/` is a
   self-contained package (RSS/PSX ingestion, entity linking, dedup, FinBERT scoring, aggregation
   engine). The API request only *reads* pre-scored articles from SQLite `sentiment/data/news.db`
@@ -65,7 +69,10 @@ regime-aware synthesis. LangGraph orchestration (`app/orchestration/`) is planne
   (repo root, its own pyproject/tests), served on `MACRO_AGENT_URL` (default `http://localhost:8010`).
   If that service is not running, the macro agent degrades instead of failing.
 - `fundamentals/`: being rebuilt from scratch on `aneeqa/fundamentals-agent`. The target design is in
-  `docs/fundamentals_agent.md`. An earlier, unverified draft is kept for reference on the
+  `docs/fundamentals_agent.md`; data comes only from PSX (`docs/fundamentals_data.md`): standalone
+  statements, `published_at` from dated PSX filings, balance sheets keyed from filing PDFs and checked by
+  `data/validate_official.py`. Company metadata (PSX symbol, bank/non-bank, fiscal year-end) is in
+  `fundamentals/reference/companies.csv`. An earlier, unverified draft is kept for reference on the
   `wip/fundamentals-agent` branch (`git show wip/fundamentals-agent:<path>`). Do not merge that branch.
 - `fx/`, `forensics/`: stubs that raise `NotImplementedError`.
 

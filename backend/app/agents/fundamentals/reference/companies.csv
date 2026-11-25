@@ -1,0 +1,15 @@
+ticker,psx_symbol,company_name,company_type,sector,fiscal_year_end_month,statement_basis
+HBL,HBL,Habib Bank Limited,bank,Commercial Banks,12,unconsolidated
+UBL,UBL,United Bank Limited,bank,Commercial Banks,12,unconsolidated
+MEBL,MEBL,Meezan Bank Limited,bank,Commercial Banks,12,unconsolidated
+MCB,MCB,MCB Bank Limited,bank,Commercial Banks,12,unconsolidated
+LUCK,LUCK,Lucky Cement Limited,non_bank,Cement,6,unconsolidated
+FFC,FFC,Fauji Fertilizer Company Limited,non_bank,Fertilizer,12,unconsolidated
+ENGROH,ENGROH,Engro Holdings Limited,non_bank,Fertilizer,12,unconsolidated
+OGDC,OGDC,Oil & Gas Development Company Limited,non_bank,Oil & Gas Exploration,6,unconsolidated
+PPL,PPL,Pakistan Petroleum Limited,non_bank,Oil & Gas Exploration,6,unconsolidated
+PSO,PSO,Pakistan State Oil Company Limited,non_bank,Oil & Gas Marketing,6,unconsolidated
+HUBC,HUBC,The Hub Power Company Limited,non_bank,Power Generation,6,unconsolidated
+SEARL,SEARL,The Searle Company Limited,non_bank,Pharmaceuticals,6,unconsolidated
+SYS,SYS,Systems Limited,non_bank,Technology & Communication,12,unconsolidated
+PTCL,PTC,Pakistan Telecommunication Company Limited,non_bank,Technology & Communication,12,unconsolidated
