@@ -2,8 +2,8 @@
 
 Features use the same definitions as training (dataset.features_from): size and margin from the
 latest trailing-twelve-month figures, growth from the last two published fiscal years. The
-prediction is relative to the PSX equal-weighted index, so it is scaled back by the index level
-on the valuation date.
+prediction is relative to the market's median P/E on the valuation date (market_level.py), so it
+is shifted back by that level.
 """
 
 from __future__ import annotations
@@ -17,19 +17,19 @@ import pandas as pd
 
 from app.agents.fundamentals.data.loader import Snapshot
 from app.agents.fundamentals.valuation.dataset import FEATURES, NUMERIC_FEATURES, features_from
-from app.agents.fundamentals.valuation.market_index import level_on
+from app.agents.fundamentals.valuation.market_level import level_cached as level_on
 from app.agents.fundamentals.valuation.train import MODEL_PATH
 
 LABELS = {
-    "log_revenue": "Revenue (size)",
-    "log_profit": "Profit (size)",
-    "log_loss": "Loss (size)",
-    "is_loss": "Loss-making",
+    "log_revenue": "Revenue level",
+    "log_profit": "Profit level",
+    "log_loss": "Size of losses (none = 0)",
+    "is_loss": "Loss-making or not",
     "net_margin": "Net margin",
     "revenue_growth": "Revenue growth",
     "profit_growth": "Profit growth",
-    "is_bank": "Bank",
-    "sector_code": "Sector",
+    "is_bank": "Bank or not",
+    "sector_code": "PSX sector",
 }
 
 
@@ -144,7 +144,7 @@ def value(s: Snapshot) -> Valuation:
     v.features = {
         k: (None if isinstance(x, float) and np.isnan(x) else x) for k, x in feats.items()
     }
-    v.implied_market_cap = float(np.exp(pred) * level)
+    v.implied_market_cap = float(np.exp(pred + level))
     v.implied_value_per_share = v.implied_market_cap * 1e6 / s.shares
     v.gap = v.implied_market_cap / s.market_cap - 1
     iv = rep.get("residual_interval_80pct_log")

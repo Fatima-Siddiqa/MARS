@@ -1,8 +1,8 @@
 """Train and evaluate the valuation model on the PSX-wide training set.
 
-Target: log(market cap) relative to the PSX equal-weighted index, on the first trading day after
-the fiscal-year figures were published (see dataset.py). So exp(prediction) x index level = the
-market cap that companies with these fundamentals typically had: the model's fair value.
+Target: log(market cap) minus the market's median log P/E, on the first trading day after the
+fiscal-year figures were published (see dataset.py, market_level.py). So exp(prediction + level)
+is the market cap that companies with these fundamentals typically had: the model's fair value.
 
 Candidates (simplest first):
   sector_pe_baseline  sector median P/E from training years (P/S for loss-makers) - no fitting
@@ -163,8 +163,12 @@ def walk_forward(ds: pd.DataFrame) -> dict:
         folds.append(fold)
         oos.append(frame)
     summary = {n: _metrics(*pooled[n]) for n in ORDER if pooled[n][0]}
-    return {"folds": folds, "pooled": summary, "residuals": residuals,
-            "oos": pd.concat(oos, ignore_index=True) if oos else pd.DataFrame()}
+    return {
+        "folds": folds,
+        "pooled": summary,
+        "residuals": residuals,
+        "oos": pd.concat(oos, ignore_index=True) if oos else pd.DataFrame(),
+    }
 
 
 def choose(ev: dict) -> tuple[str, str]:
@@ -217,8 +221,7 @@ def train(rebuild_dataset: bool = True) -> dict:
             "dropped": ds.attrs.get("dropped", {}),
             "source": "PSX company pages + PSX daily market summaries (official)",
         },
-        "target": "log(market cap) - log(PSX equal-weighted index), first trading day after "
-        "publication",
+        "target": "log(market cap) - market median log P/E, first trading day after publication",
         "features": FEATURES,
         "walk_forward": ev["folds"],
         "pooled_test": ev["pooled"],

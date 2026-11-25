@@ -21,6 +21,7 @@ not emitted; it is listed in the report instead. Raw pages are cached under
     python -m app.agents.fundamentals.data.psx_official            # all companies
     python -m app.agents.fundamentals.data.psx_official HBL LUCK   # some companies
 """
+
 from __future__ import annotations
 
 import argparse
@@ -68,9 +69,21 @@ LINE_ITEMS = {
 }
 
 STATEMENT_COLUMNS = [
-    "ticker", "line_item", "value", "unit", "period_start", "period_end", "period_kind",
-    "fiscal_label", "published_at", "published_via", "source", "source_ref", "retrieved_at",
-    "is_restated", "version",
+    "ticker",
+    "line_item",
+    "value",
+    "unit",
+    "period_start",
+    "period_end",
+    "period_kind",
+    "fiscal_label",
+    "published_at",
+    "published_via",
+    "source",
+    "source_ref",
+    "retrieved_at",
+    "is_restated",
+    "version",
 ]
 
 
@@ -167,8 +180,7 @@ def fetch_portal_filings(sym: str, session: requests.Session, today: date) -> li
         if _PORTAL["failures"] >= PORTAL_MAX_FAILURES:
             return []
         try:
-            r = session.post(PORTAL_URL, data={"name": "get_comp_data", "smbCode": sym},
-                             timeout=20)
+            r = session.post(PORTAL_URL, data={"name": "get_comp_data", "smbCode": sym}, timeout=20)
             r.raise_for_status()
             _PORTAL["failures"] = 0
         except requests.RequestException as exc:
@@ -186,11 +198,15 @@ def fetch_portal_filings(sym: str, session: requests.Session, today: date) -> li
         m = re.search(r"id=([\w-]+)\">(\w+)<", row.get("Reports", ""))
         if not m:
             continue
-        out.append({
-            "doc_id": m.group(1), "kind": m.group(2).lower(),
-            "period_ended": row.get("period_ended"), "posting_date": row.get("posting_date"),
-            "url": PORTAL_DOC_URL.format(id=m.group(1)),
-        })
+        out.append(
+            {
+                "doc_id": m.group(1),
+                "kind": m.group(2).lower(),
+                "period_ended": row.get("period_ended"),
+                "posting_date": row.get("posting_date"),
+                "url": PORTAL_DOC_URL.format(id=m.group(1)),
+            }
+        )
     return out
 
 
@@ -215,8 +231,10 @@ def parse_financials(html: str) -> list[tuple[str, str, float]]:
     sec = soup.find(id="financials")
     out = []
     for table in sec.find_all("table") if sec else []:
-        rows = [[c.get_text(" ", strip=True) for c in tr.find_all(["th", "td"])]
-                for tr in table.find_all("tr")]
+        rows = [
+            [c.get_text(" ", strip=True) for c in tr.find_all(["th", "td"])]
+            for tr in table.find_all("tr")
+        ]
         if not rows:
             continue
         periods = rows[0][1:]
@@ -239,8 +257,10 @@ def parse_shares(html: str) -> dict | None:
     face = re.search(r"Face Value\s+([\d.,]+)", text)
     if not shares:
         return None
-    return {"shares_outstanding": float(shares.group(1).replace(",", "")),
-            "face_value": float(face.group(1)) if face else None}
+    return {
+        "shares_outstanding": float(shares.group(1).replace(",", "")),
+        "face_value": float(face.group(1)) if face else None,
+    }
 
 
 _ENDED = re.compile(r"(?:ended|ending)\s*[-:]?\s*(.+)$", re.I)
@@ -284,13 +304,21 @@ def parse_announcements(html: str) -> list[dict]:
         period_end = _period_end_in(title)
         if period_end is not None and period_end > filed:
             period_end = None  # typo in the PSX title (e.g. "3036"): period cannot be trusted
-        out.append({"filed": filed, "title": title, "kind": kind,
-                    "period_end": period_end, "url": DOC_URL.format(href=a["href"])})
+        out.append(
+            {
+                "filed": filed,
+                "title": title,
+                "kind": kind,
+                "period_end": period_end,
+                "url": DOC_URL.format(href=a["href"]),
+            }
+        )
     return out
 
 
-def publication(period_end: date, kind: str, fy_end: date, anns: list[dict],
-                portal: list[dict]) -> tuple[date, str, str] | None:
+def publication(
+    period_end: date, kind: str, fy_end: date, anns: list[dict], portal: list[dict]
+) -> tuple[date, str, str] | None:
     """Earliest PSX filing that published `period_end`: (date, how, url), or None.
 
     Order of preference: the "Financial Results" announcement, then the report transmission on
@@ -316,8 +344,11 @@ def publication(period_end: date, kind: str, fy_end: date, anns: list[dict],
     # No filing found for this period. Accounts are filed in order, so the first PSX filing for
     # a LATER period is an upper bound on when this one was public. Using it can only make the
     # figure available later than it really was (never earlier), so there is no look-ahead.
-    later = [(a["filed"], a["url"]) for a in anns
-             if a["period_end"] and a["period_end"] > period_end and a["filed"] >= period_end]
+    later = [
+        (a["filed"], a["url"])
+        for a in anns
+        if a["period_end"] and a["period_end"] > period_end and a["filed"] >= period_end
+    ]
     for f in portal:
         try:
             pe = date.fromisoformat(f["period_ended"])
@@ -335,8 +366,9 @@ def publication(period_end: date, kind: str, fy_end: date, anns: list[dict],
 # --- collection --------------------------------------------------------------------------------
 
 
-def infer_fy_end_month(anns: list[dict], portal: list[dict],
-                       labels: list[str] | None = None) -> tuple[int | None, str]:
+def infer_fy_end_month(
+    anns: list[dict], portal: list[dict], labels: list[str] | None = None
+) -> tuple[int | None, str]:
     """Fiscal year-end month from a company's own PSX filings.
 
     1. An annual filing title ("... for the year ended June 30, 2026").
@@ -381,44 +413,91 @@ def collect_company(c: Company, session: requests.Session, today: date) -> dict:
         labels = sorted({lb for lb, _, _ in parse_financials(html)})
         month, fy_how = infer_fy_end_month(anns, portal, labels)
         if month is None:
-            return {"rows": [], "shares": None, "filings": [], "unpublished": [],
-                    "page": str(page_path), "fy": None, "fy_how": fy_how}
+            return {
+                "rows": [],
+                "shares": None,
+                "filings": [],
+                "unpublished": [],
+                "page": str(page_path),
+                "fy": None,
+                "fy_how": fy_how,
+            }
         c = Company(c.ticker, c.psx_symbol, c.company_type, month)
     retrieved = datetime.now(UTC).isoformat(timespec="seconds")
     page_url = COMPANY_URL.format(sym=c.psx_symbol)
     rows, unpublished = [], []
     for label, item, value in parse_financials(html):
         start, end, kind = fiscal_period(label, c.fiscal_year_end_month)
-        fy_end = end if kind == "annual" else fiscal_period(
-            label.split()[-1], c.fiscal_year_end_month)[1]
+        fy_end = (
+            end
+            if kind == "annual"
+            else fiscal_period(label.split()[-1], c.fiscal_year_end_month)[1]
+        )
         pub = publication(end, kind, fy_end, anns, portal)
         if pub is None:
             unpublished.append(f"{label} {item}")
             continue
         published_at, via, doc_url = pub
-        rows.append({
-            "ticker": c.ticker, "line_item": item, "value": value,
-            "unit": "PKR_per_share" if item == "eps_reported" else "PKR_thousands",
-            "period_start": start.isoformat(), "period_end": end.isoformat(),
-            "period_kind": kind, "fiscal_label": label,
-            "published_at": published_at.isoformat(), "published_via": via,
-            "source": SOURCE_PAGE, "source_ref": f"{page_url}#financials | filing: {doc_url}",
-            "retrieved_at": retrieved, "is_restated": False, "version": 1,
-        })
+        rows.append(
+            {
+                "ticker": c.ticker,
+                "line_item": item,
+                "value": value,
+                "unit": "PKR_per_share" if item == "eps_reported" else "PKR_thousands",
+                "period_start": start.isoformat(),
+                "period_end": end.isoformat(),
+                "period_kind": kind,
+                "fiscal_label": label,
+                "published_at": published_at.isoformat(),
+                "published_via": via,
+                "source": SOURCE_PAGE,
+                "source_ref": f"{page_url}#financials | filing: {doc_url}",
+                "retrieved_at": retrieved,
+                "is_restated": False,
+                "version": 1,
+            }
+        )
     shares = parse_shares(html)
     share_row = None
     if shares:
-        share_row = {"ticker": c.ticker, "as_of": today.isoformat(), **shares,
-                     "unit": "shares", "source": SOURCE_EQUITY,
-                     "source_ref": f"{page_url}#equity", "retrieved_at": retrieved}
-    filings = [{"ticker": c.ticker, "source": "company page", **{k: a[k] for k in
-                ("filed", "kind", "period_end", "title", "url")}} for a in anns]
-    filings += [{"ticker": c.ticker, "source": "financials portal", "filed": f["posting_date"],
-                 "kind": f["kind"], "period_end": f["period_ended"], "title": "",
-                 "url": f["url"]} for f in portal]
-    return {"rows": rows, "shares": share_row, "filings": filings,
-            "unpublished": unpublished, "page": str(page_path),
-            "fy": c.fiscal_year_end_month, "fy_how": fy_how}
+        share_row = {
+            "ticker": c.ticker,
+            "as_of": today.isoformat(),
+            **shares,
+            "unit": "shares",
+            "source": SOURCE_EQUITY,
+            "source_ref": f"{page_url}#equity",
+            "retrieved_at": retrieved,
+        }
+    filings = [
+        {
+            "ticker": c.ticker,
+            "source": "company page",
+            **{k: a[k] for k in ("filed", "kind", "period_end", "title", "url")},
+        }
+        for a in anns
+    ]
+    filings += [
+        {
+            "ticker": c.ticker,
+            "source": "financials portal",
+            "filed": f["posting_date"],
+            "kind": f["kind"],
+            "period_end": f["period_ended"],
+            "title": "",
+            "url": f["url"],
+        }
+        for f in portal
+    ]
+    return {
+        "rows": rows,
+        "shares": share_row,
+        "filings": filings,
+        "unpublished": unpublished,
+        "page": str(page_path),
+        "fy": c.fiscal_year_end_month,
+        "fy_how": fy_how,
+    }
 
 
 def merge_versions(old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
@@ -430,8 +509,9 @@ def merge_versions(old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
         return new
     key = ["ticker", "line_item", "period_end", "period_kind"]
     latest = old.sort_values("version").groupby(key, as_index=False).last()
-    merged = new.merge(latest[[*key, "value", "version"]], on=key, how="left",
-                       suffixes=("", "_old"))
+    merged = new.merge(
+        latest[[*key, "value", "version"]], on=key, how="left", suffixes=("", "_old")
+    )
     known = merged["value_old"].notna()
     unchanged = known & (merged["value"] == merged["value_old"])
     add = merged[~unchanged].copy()
@@ -463,8 +543,10 @@ def universe_companies() -> list[Company]:
         psx_sym = psx_eod.PSX_SYMBOL.get(r.symbol, r.symbol)
         if code in EXCLUDED_SECTORS:
             continue
-        out.append(known.get(psx_sym) or Company(
-            r.symbol, psx_sym, "bank" if code == "0807" else "non_bank", 0))
+        out.append(
+            known.get(psx_sym)
+            or Company(r.symbol, psx_sym, "bank" if code == "0807" else "non_bank", 0)
+        )
     return out
 
 
@@ -481,8 +563,12 @@ def _save(all_rows: list, shares: list, filings: list) -> None:
     fl.astype(str).drop_duplicates(["ticker", "url"]).to_csv(FILINGS_CSV, index=False)
 
 
-def collect(tickers: list[str] | None = None, today: date | None = None,
-            whole_market: bool = False, batch: int = 50) -> dict:
+def collect(
+    tickers: list[str] | None = None,
+    today: date | None = None,
+    whole_market: bool = False,
+    batch: int = 50,
+) -> dict:
     """Collect PSX company-page figures for the reference companies (default) or all of PSX."""
     today = today or date.today()
     session = _session()
@@ -500,11 +586,23 @@ def collect(tickers: list[str] | None = None, today: date | None = None,
         if res["shares"]:
             shares.append(res["shares"])
         listed = res["shares"]["shares_outstanding"] if res["shares"] else None
-        report[c.ticker] = {"rows": len(res["rows"]), "unpublished": res["unpublished"],
-                            "shares": listed, "fy": res["fy"], "fy_how": res["fy_how"]}
-        uni.append({"ticker": c.ticker, "psx_symbol": c.psx_symbol,
-                    "company_type": c.company_type, "fiscal_year_end_month": res["fy"],
-                    "fy_how": res["fy_how"], "rows": len(res["rows"])})
+        report[c.ticker] = {
+            "rows": len(res["rows"]),
+            "unpublished": res["unpublished"],
+            "shares": listed,
+            "fy": res["fy"],
+            "fy_how": res["fy_how"],
+        }
+        uni.append(
+            {
+                "ticker": c.ticker,
+                "psx_symbol": c.psx_symbol,
+                "company_type": c.company_type,
+                "fiscal_year_end_month": res["fy"],
+                "fy_how": res["fy_how"],
+                "rows": len(res["rows"]),
+            }
+        )
         if i % batch == 0:
             _save(all_rows, shares, filings)
             all_rows, shares, filings = [], [], []
@@ -518,8 +616,11 @@ def collect(tickers: list[str] | None = None, today: date | None = None,
 def main() -> None:
     ap = argparse.ArgumentParser(description="Collect official PSX fundamentals")
     ap.add_argument("tickers", nargs="*")
-    ap.add_argument("--whole-market", action="store_true",
-                    help="every listed operating company (for model training and peers)")
+    ap.add_argument(
+        "--whole-market",
+        action="store_true",
+        help="every listed operating company (for model training and peers)",
+    )
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO)
     report = collect(a.tickers or None, whole_market=a.whole_market)

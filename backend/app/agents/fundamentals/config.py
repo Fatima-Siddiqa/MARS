@@ -9,11 +9,22 @@ UNIT_TO_MILLIONS = {"PKR": 1e-6, "PKR_thousands": 1e-3, "PKR_millions": 1.0}
 
 # Flow items are amounts over a period (summed into trailing twelve months).
 FLOW_ITEMS = {
-    "revenue", "markup_earned", "total_income", "net_interest_income", "operating_expenses",
+    "revenue",
+    "markup_earned",
+    "total_income",
+    "net_interest_income",
+    "operating_expenses",
     "net_income",
 }
 # Stock items are balances at a date (taken from the latest balance sheet).
 STOCK_ITEMS = {
-    "total_assets", "total_liabilities", "total_equity", "share_capital", "advances", "deposits",
-    "investments", "cash_and_equivalents", "total_borrowings",
+    "total_assets",
+    "total_liabilities",
+    "total_equity",
+    "share_capital",
+    "advances",
+    "deposits",
+    "investments",
+    "cash_and_equivalents",
+    "total_borrowings",
 }

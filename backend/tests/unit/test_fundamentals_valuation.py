@@ -109,7 +109,7 @@ def test_value_scales_by_index_and_explains(tmp_path, monkeypatch):
         "net_income": Fact(450.0, None, d, d, "s", "r"),
     }
     v = predict.value(s)
-    expected = np.exp(rep_pred(tmp_path, s)) * 2.0
+    expected = np.exp(rep_pred(tmp_path, s) + 2.0)  # prediction is relative to the market log P/E
     assert v.implied_market_cap == pytest.approx(expected)
     assert v.gap == pytest.approx(expected / 5000.0 - 1)
     assert v.range_per_share[0] < v.implied_value_per_share < v.range_per_share[1]

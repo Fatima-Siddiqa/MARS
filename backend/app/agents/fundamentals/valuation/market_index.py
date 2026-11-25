@@ -17,7 +17,7 @@ from app.ingestion import psx_eod
 
 
 @lru_cache(maxsize=1)
-def _index(n_files: int) -> pd.Series:
+def _wide(n_files: int) -> pd.DataFrame:
     closes = {}
     for sym in psx_eod.symbols():
         df = psx_eod.load_symbol(sym)
@@ -25,7 +25,32 @@ def _index(n_files: int) -> pd.Series:
             continue
         df = df[df["volume"] > 0]
         closes[sym] = df["close"]
-    wide = pd.DataFrame(closes).sort_index()
+    if not closes:
+        return pd.DataFrame(index=pd.DatetimeIndex([]))
+    return pd.DataFrame(closes).sort_index()
+
+
+def wide_closes() -> pd.DataFrame:
+    """Traded closes of every listed company (dates x symbols)."""
+    return _wide(len(list(psx_eod.EOD_DIR.glob("????-??-??.Z"))))
+
+
+def market_return(t0, t1) -> float | None:
+    """Median log return of all listed companies that traded around both dates."""
+    w = wide_closes()
+    if w.empty:
+        return None
+    w = w.ffill(limit=5)
+    a, b = w[w.index <= pd.Timestamp(t0)], w[w.index <= pd.Timestamp(t1)]
+    if a.empty or b.empty:
+        return None
+    r = np.log(b.iloc[-1] / a.iloc[-1]).dropna()
+    return float(r.median()) if len(r) >= 50 else None
+
+
+@lru_cache(maxsize=1)
+def _index(n_files: int) -> pd.Series:
+    wide = _wide(n_files)
     rets = np.log(wide).diff()
     rets = rets.where(rets.abs() < np.log(1.5))
     daily = rets.median(axis=1, skipna=True).fillna(0.0)

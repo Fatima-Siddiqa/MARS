@@ -2,8 +2,8 @@
 
 Uses the walk-forward out-of-sample predictions written by train.py: for every test
 company-year, `gap_log` = model value - market value (log), from a model that never saw that
-year. For each one we measure the stock's return over the next HORIZON trading days minus the
-PSX equal-weighted index return (excess return).
+year. For each one we measure the stock's log return over the next HORIZON trading days minus
+the median log return of all listed PSX companies over the same days (excess return).
 
 Questions answered (all on out-of-sample data):
 - Do higher gaps (cheaper vs fundamentals) come before higher excess returns? (Spearman IC)
@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
-from app.agents.fundamentals.valuation.market_index import market_index
+from app.agents.fundamentals.valuation.market_index import market_return
 from app.agents.fundamentals.valuation.train import MODEL_DIR, OOS_CSV
 from app.ingestion import psx_eod
 
@@ -42,7 +42,7 @@ CALIBRATION_JSON = MODEL_DIR / "call_calibration.json"
 CALIBRATION_MD = MODEL_DIR / "call_calibration.md"
 
 
-def forward_excess(ticker: str, obs_date: str, idx: pd.Series) -> float | None:
+def forward_excess(ticker: str, obs_date: str) -> float | None:
     df = psx_eod.load_symbol(ticker)
     if df is None:
         return None
@@ -53,10 +53,10 @@ def forward_excess(ticker: str, obs_date: str, idx: pd.Series) -> float | None:
     if (window.pct_change() < -0.40).any():
         return None  # probable bonus issue / split inside the window
     t0, t1 = window.index[0], window.index[-1]
-    i0, i1 = idx[idx.index <= t0], idx[idx.index <= t1]
-    if i0.empty or i1.empty:
+    mkt = market_return(t0, t1)
+    if mkt is None:
         return None
-    return float(np.log(window.iloc[-1] / window.iloc[0]) - np.log(i1.iloc[-1] / i0.iloc[-1]))
+    return float(np.log(window.iloc[-1] / window.iloc[0]) - mkt)
 
 
 def _bucket(x: pd.Series) -> dict:
@@ -69,8 +69,7 @@ def _bucket(x: pd.Series) -> dict:
 
 def calibrate() -> dict:
     oos = pd.read_csv(OOS_CSV)
-    idx = market_index()
-    oos["excess"] = [forward_excess(t, d, idx) for t, d in zip(oos["ticker"], oos["obs_date"])]
+    oos["excess"] = [forward_excess(t, d) for t, d in zip(oos["ticker"], oos["obs_date"])]
     data = oos.dropna(subset=["excess", "gap_log"])
     out: dict = {
         "calibrated_at": datetime.now(UTC).isoformat(timespec="seconds"),

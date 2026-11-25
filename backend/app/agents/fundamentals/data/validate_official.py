@@ -19,6 +19,7 @@ Checks (any failure is reported; nothing is "fixed" silently):
 
     python -m app.agents.fundamentals.data.validate_official
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -41,8 +42,9 @@ SHARE_TOLERANCE = 0.005
 
 def load_keyed() -> pd.DataFrame:
     k = pd.read_csv(KEYED_CSV, dtype={"doc_id": str})
-    k["source_ref"] = k["doc_id"].map(lambda d: DOC_URL.format(doc_id=d)) + "#page=" + \
-        k["doc_page"].astype(str)
+    k["source_ref"] = (
+        k["doc_id"].map(lambda d: DOC_URL.format(doc_id=d)) + "#page=" + k["doc_page"].astype(str)
+    )
     return k
 
 
@@ -56,8 +58,12 @@ def _page_text(ticker: str, doc_id: str, page: int) -> str | None:
     pdf = PDF_DIR / f"{psx_sym}_{doc_id}.pdf"
     if not pdf.exists():
         return None
-    out = subprocess.run(["pdftotext", "-raw", "-f", str(page), "-l", str(page), str(pdf), "-"],
-                         capture_output=True, text=True, errors="ignore")
+    out = subprocess.run(
+        ["pdftotext", "-raw", "-f", str(page), "-l", str(page), str(pdf), "-"],
+        capture_output=True,
+        text=True,
+        errors="ignore",
+    )
     return out.stdout
 
 
@@ -86,8 +92,10 @@ def check_text_pdfs(k: pd.DataFrame) -> tuple[list[str], int]:
             continue
         checked += 1
         if _printed(r.value) not in text:
-            errs.append(f"{r.ticker} {r.line_item} {r.period_end}: {_printed(r.value)} "
-                        f"not found on page {r.doc_page} of {r.doc_id}")
+            errs.append(
+                f"{r.ticker} {r.line_item} {r.period_end}: {_printed(r.value)} "
+                f"not found on page {r.doc_page} of {r.doc_id}"
+            )
     return errs, checked
 
 
@@ -99,15 +107,20 @@ def check_against_psx_quarters(k: pd.DataFrame) -> list[str]:
     ytd = k[(k["period_kind"] == "ytd") & (k["line_item"] == "net_income")]
     for r in ytd.itertuples():
         scale = 1e-3 if r.unit == "PKR" else 1.0  # PSX page is in Rs '000
-        quarters = q[(q["ticker"] == r.ticker) & (q["period_start"] >= r.period_start)
-                     & (q["period_end"] <= r.period_end)]
+        quarters = q[
+            (q["ticker"] == r.ticker)
+            & (q["period_start"] >= r.period_start)
+            & (q["period_end"] <= r.period_end)
+        ]
         n_expected = round((pd.Timestamp(r.period_end) - pd.Timestamp(r.period_start)).days / 91.3)
         if len(quarters) != n_expected:
             continue  # PSX page does not show every quarter of this period; nothing to compare
         total = quarters["value"].sum()
         if abs(total - r.value * scale) > max(2, abs(total) * 1e-6):  # rounding of Rs to Rs '000
-            errs.append(f"{r.ticker} YTD net income {r.period_end}: filing {r.value * scale:,.0f} "
-                        f"vs PSX quarters {total:,.0f}")
+            errs.append(
+                f"{r.ticker} YTD net income {r.period_end}: filing {r.value * scale:,.0f} "
+                f"vs PSX quarters {total:,.0f}"
+            )
     return errs
 
 
@@ -124,8 +137,10 @@ def check_shares(k: pd.DataFrame) -> list[str]:
         listed = sh.loc[r.ticker, "shares_outstanding"]
         gap = implied / listed - 1
         if abs(gap) > SHARE_TOLERANCE:
-            notes.append(f"{r.ticker}: filing implies {implied:,.0f} shares, PSX lists "
-                         f"{listed:,.0f} ({gap:+.1%})")
+            notes.append(
+                f"{r.ticker}: filing implies {implied:,.0f} shares, PSX lists "
+                f"{listed:,.0f} ({gap:+.1%})"
+            )
     return notes
 
 
@@ -145,15 +160,19 @@ def check_new_filings(k: pd.DataFrame) -> list[str]:
     for t, filed in latest_filed.items():
         have = keyed.get(t)
         if have is None or filed > have:
-            out.append(f"{t}: PSX filing for period ended {filed}; keyed balance sheet is "
-                       f"{have or 'missing'}")
+            out.append(
+                f"{t}: PSX filing for period ended {filed}; keyed balance sheet is "
+                f"{have or 'missing'}"
+            )
     return out
 
 
 def check_dates(k: pd.DataFrame) -> list[str]:
     bad = k[pd.to_datetime(k["published_at"]) < pd.to_datetime(k["period_end"])]
-    return [f"{r.ticker} {r.line_item}: published {r.published_at} before {r.period_end}"
-            for r in bad.itertuples()]
+    return [
+        f"{r.ticker} {r.line_item}: published {r.published_at} before {r.period_end}"
+        for r in bad.itertuples()
+    ]
 
 
 def run() -> dict:

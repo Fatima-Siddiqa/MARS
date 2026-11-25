@@ -13,6 +13,7 @@ Rules:
 - All money is converted to PKR millions; the original unit stays in the source data.
 - Anything that cannot be computed is None with a reason in `warnings`; nothing defaults to 0.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -96,8 +97,15 @@ def _companies_cached(ref_mtime: float, uni_mtime: float) -> pd.DataFrame:
         uni["fiscal_year_end_month"] = uni["fiscal_year_end_month"].astype(int)
         uni["coverage"] = "PSX page only (no filed balance sheet)"
         frames.append(uni)
-    cols = ["ticker", "psx_symbol", "company_type", "psx_sector_code", "sector",
-            "fiscal_year_end_month", "coverage"]
+    cols = [
+        "ticker",
+        "psx_symbol",
+        "company_type",
+        "psx_sector_code",
+        "sector",
+        "fiscal_year_end_month",
+        "coverage",
+    ]
     return pd.concat([f[cols] for f in frames], ignore_index=True).set_index("ticker")
 
 
@@ -116,29 +124,61 @@ def _facts_cached(keyed_mtime: float, page_mtime: float) -> pd.DataFrame:
     frames = []
     if KEYED_CSV.exists():
         k = pd.read_csv(KEYED_CSV, dtype={"doc_id": str})
-        frames.append(pd.DataFrame({
-            "ticker": k["ticker"], "line_item": k["line_item"],
-            "value": k["value"] * k["unit"].map(UNIT_TO_MILLIONS),
-            "kind": k["period_kind"], "period_start": k["period_start"],
-            "period_end": k["period_end"], "published_at": k["published_at"], "version": 1,
-            "priority": 0, "source": "PSX filing (" + k["published_via"] + ")",
-            "source_ref": [DOC_URL.format(doc_id=d, page=p)
-                           for d, p in zip(k["doc_id"], k["doc_page"])],
-        }))
+        frames.append(
+            pd.DataFrame(
+                {
+                    "ticker": k["ticker"],
+                    "line_item": k["line_item"],
+                    "value": k["value"] * k["unit"].map(UNIT_TO_MILLIONS),
+                    "kind": k["period_kind"],
+                    "period_start": k["period_start"],
+                    "period_end": k["period_end"],
+                    "published_at": k["published_at"],
+                    "version": 1,
+                    "priority": 0,
+                    "source": "PSX filing (" + k["published_via"] + ")",
+                    "source_ref": [
+                        DOC_URL.format(doc_id=d, page=p) for d, p in zip(k["doc_id"], k["doc_page"])
+                    ],
+                }
+            )
+        )
     if STATEMENTS_CSV.exists():
         s = pd.read_csv(STATEMENTS_CSV)
         scale = s["unit"].map({**UNIT_TO_MILLIONS, "PKR_per_share": 1.0})
-        frames.append(pd.DataFrame({
-            "ticker": s["ticker"], "line_item": s["line_item"], "value": s["value"] * scale,
-            "kind": s["period_kind"], "period_start": s["period_start"],
-            "period_end": s["period_end"], "published_at": s["published_at"],
-            "version": s["version"], "priority": 1, "source": s["source"],
-            "source_ref": s["source_ref"],
-        }))
+        frames.append(
+            pd.DataFrame(
+                {
+                    "ticker": s["ticker"],
+                    "line_item": s["line_item"],
+                    "value": s["value"] * scale,
+                    "kind": s["period_kind"],
+                    "period_start": s["period_start"],
+                    "period_end": s["period_end"],
+                    "published_at": s["published_at"],
+                    "version": s["version"],
+                    "priority": 1,
+                    "source": s["source"],
+                    "source_ref": s["source_ref"],
+                }
+            )
+        )
     if not frames:
-        return pd.DataFrame(columns=["ticker", "line_item", "value", "kind", "period_start",
-                                     "period_end", "published_at", "version", "priority",
-                                     "source", "source_ref"])
+        return pd.DataFrame(
+            columns=[
+                "ticker",
+                "line_item",
+                "value",
+                "kind",
+                "period_start",
+                "period_end",
+                "published_at",
+                "version",
+                "priority",
+                "source",
+                "source_ref",
+            ]
+        )
     f = pd.concat(frames, ignore_index=True)
     for c in ("period_start", "period_end", "published_at"):
         f[c] = pd.to_datetime(f[c], errors="coerce").dt.date
@@ -164,8 +204,9 @@ def facts_as_of(facts: pd.DataFrame, ticker: str, as_of: date) -> pd.DataFrame:
 
 
 def _fact(row) -> Fact:
-    return Fact(row.value, row.period_start, row.period_end, row.published_at, row.source,
-                row.source_ref)
+    return Fact(
+        row.value, row.period_start, row.period_end, row.published_at, row.source, row.source_ref
+    )
 
 
 def _period(f: pd.DataFrame, item: str, start: date, end: date) -> list[Fact] | None:
@@ -178,8 +219,9 @@ def _period(f: pd.DataFrame, item: str, start: date, end: date) -> list[Fact] | 
         q_end = (s + pd.DateOffset(months=3) - pd.Timedelta(days=1)).date()
         if q_end > end:
             return None
-        q = f[(f["line_item"] == item) & (f["period_start"] == s.date())
-              & (f["period_end"] == q_end)]
+        q = f[
+            (f["line_item"] == item) & (f["period_start"] == s.date()) & (f["period_end"] == q_end)
+        ]
         if q.empty:
             return None
         parts.append(_fact(q.iloc[0]))
@@ -190,8 +232,11 @@ def _period(f: pd.DataFrame, item: str, start: date, end: date) -> list[Fact] | 
 def _fy_start(end: date, fy_end_month: int) -> date:
     """Start of the fiscal year containing `end`."""
     y = end.year if end.month > fy_end_month else end.year - 1
-    return (pd.Timestamp(year=y, month=fy_end_month, day=1) + pd.offsets.MonthEnd(0)
-            + pd.Timedelta(days=1)).date()
+    return (
+        pd.Timestamp(year=y, month=fy_end_month, day=1)
+        + pd.offsets.MonthEnd(0)
+        + pd.Timedelta(days=1)
+    ).date()
 
 
 def ttm(f: pd.DataFrame, item: str, end: date, fy_end_month: int) -> tuple[Fact, str] | None:
@@ -211,19 +256,30 @@ def ttm(f: pd.DataFrame, item: str, end: date, fy_end_month: int) -> tuple[Fact,
         prior = _period(f, item, prev_start, prior_ytd_end)
         if not (cur and annual and prior):
             return None
-        value = (sum(p.value for p in annual) + sum(p.value for p in cur)
-                 - sum(p.value for p in prior))
+        value = (
+            sum(p.value for p in annual) + sum(p.value for p in cur) - sum(p.value for p in prior)
+        )
         sources = cur + annual + prior
         latest = max(sources, key=lambda p: p.published_at)
-        return Fact(value, None, end, latest.published_at, "; ".join(sorted({p.source for p in
-                    sources})), " | ".join(dict.fromkeys(p.source_ref for p in sources))), \
-            "prior annual + year-to-date - prior year-to-date"
+        return Fact(
+            value,
+            None,
+            end,
+            latest.published_at,
+            "; ".join(sorted({p.source for p in sources})),
+            " | ".join(dict.fromkeys(p.source_ref for p in sources)),
+        ), "prior annual + year-to-date - prior year-to-date"
     if not parts:
         return None
     latest = max(parts, key=lambda p: p.published_at)
-    return Fact(sum(p.value for p in parts), fy_start, end, latest.published_at,
-                "; ".join(sorted({p.source for p in parts})),
-                " | ".join(dict.fromkeys(p.source_ref for p in parts))), method
+    return Fact(
+        sum(p.value for p in parts),
+        fy_start,
+        end,
+        latest.published_at,
+        "; ".join(sorted({p.source for p in parts})),
+        " | ".join(dict.fromkeys(p.source_ref for p in parts)),
+    ), method
 
 
 # --- prices and shares --------------------------------------------------------------------------
@@ -242,8 +298,11 @@ def price_on(ticker: str, as_of: date) -> tuple[float, date] | None:
 
 @lru_cache(maxsize=1)
 def _shares_cached(mtime: float) -> pd.DataFrame:
-    return pd.read_csv(SHARES_CSV) if SHARES_CSV.exists() else pd.DataFrame(
-        columns=["ticker", "as_of", "shares_outstanding", "face_value"])
+    return (
+        pd.read_csv(SHARES_CSV)
+        if SHARES_CSV.exists()
+        else pd.DataFrame(columns=["ticker", "as_of", "shares_outstanding", "face_value"])
+    )
 
 
 def _shares_table() -> pd.DataFrame:
@@ -320,12 +379,19 @@ def build_snapshot(ticker: str, as_of: date | None = None) -> Snapshot:
         parts = _period(flows, item, _fy_start(latest, fy_month), latest)
         if parts:
             src = max(parts, key=lambda p: p.published_at)
-            snap.ytd[item] = Fact(sum(p.value for p in parts), _fy_start(latest, fy_month),
-                                  latest, src.published_at, src.source, src.source_ref)
+            snap.ytd[item] = Fact(
+                sum(p.value for p in parts),
+                _fy_start(latest, fy_month),
+                latest,
+                src.published_at,
+                src.source,
+                src.source_ref,
+            )
         ann = flows[(flows["line_item"] == item) & (flows["kind"] == "annual")]
         if len(ann):
-            snap.annual[item] = [_fact(r) for r in ann.sort_values("period_end").tail(2)
-                                 .itertuples()]
+            snap.annual[item] = [
+                _fact(r) for r in ann.sort_values("period_end").tail(2).itertuples()
+            ]
 
     px = price_on(ticker, as_of)
     if px is None:

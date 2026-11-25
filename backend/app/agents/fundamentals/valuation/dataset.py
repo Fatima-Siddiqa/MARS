@@ -4,7 +4,8 @@ One sample per company per published fiscal year:
 - features: that year's official figures from the PSX company page (revenue / total income,
   profit after tax), growth vs the previous year, margin, bank flag, PSX sector;
 - observation date: the first trading day AFTER the figures were published on PSX;
-- target: log(market cap on that day) - log(PSX equal-weighted index on that day).
+- target: log(market cap on that day) - market median log P/E on that day
+  (valuation relative to the market's typical multiple; see market_level.py).
 
 Market cap = official PSX close x shares, with shares = profit after tax / reported EPS for that
 year (PSX shows only today's share count; EPS was reported on the shares of that year).
@@ -24,7 +25,7 @@ from app.agents.fundamentals.data.psx_official import (
     STATEMENTS_CSV,
     UNIVERSE_CSV,
 )
-from app.agents.fundamentals.valuation.market_index import market_index
+from app.agents.fundamentals.valuation.market_level import level_cached
 from app.core.config import REPO_ROOT
 from app.ingestion import psx_eod
 
@@ -108,7 +109,6 @@ def build_training_set(save: bool = True) -> pd.DataFrame:
     listed = (
         pd.read_csv(SHARES_CSV).sort_values("as_of").groupby("ticker")["shares_outstanding"].last()
     )
-    idx = market_index()
     rows, dropped = [], {}
 
     def drop(reason):
@@ -144,9 +144,9 @@ def build_training_set(save: bool = True) -> pd.DataFrame:
                 drop("no traded price within 10 days after publication")
                 continue
             day, close = obs
-            level = idx[idx.index <= day]
-            if level.empty:
-                drop("before market index start")
+            level = level_cached(day)
+            if level is None:
+                drop("market P/E level not available on that date")
                 continue
             prev = wide.loc[ends[i - 1]] if i > 0 else None
             if prev is not None and (pd.Timestamp(end) - pd.Timestamp(ends[i - 1])).days > 400:
@@ -172,9 +172,9 @@ def build_training_set(save: bool = True) -> pd.DataFrame:
                     "close": close,
                     "shares": shares,
                     "market_cap": mcap,
-                    "index_level": float(level.iloc[-1]),
+                    "market_log_pe": level,
                     **feats,
-                    TARGET: np.log(mcap) - np.log(float(level.iloc[-1])),
+                    TARGET: np.log(mcap) - level,
                 }
             )
     ds = pd.DataFrame(rows)

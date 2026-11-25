@@ -139,7 +139,8 @@ export default function FundamentalsPanel({ ticker }: { ticker: string }) {
 
         <div className="space-y-5">
           <div>
-            <h3 className="mb-2 text-sm font-bold">What drives the model&apos;s fair value</h3>
+            <h3 className="text-sm font-bold">What drives the model&apos;s fair value</h3>
+            <p className="mb-2 text-[11px] text-slate-500">Effect of each input compared with a typical PSX company (SHAP).</p>
             {v.contributions.length === 0 ? (
               <p className="text-sm text-slate-500">{v.reason ?? "The peer baseline is a fixed formula (no model drivers)."}</p>
             ) : (
