@@ -2,6 +2,8 @@
 
 Raw files are NOT committed. Copy them to `data/raw/stocks/` (xlsx) and the KSE-100 csv to
 `data/raw/KSE_100_index.csv`. Override with env vars MARS_PRICE_DIR / MARS_BENCHMARK_PATH.
+Prices after the xlsx files end come from official PSX daily files: refresh them with
+`python -m app.ingestion.psx_eod` (see app/ingestion/psx_eod.py).
 """
 import asyncio
 import os
@@ -28,7 +30,9 @@ FILE_ALIASES = {
     "OGDCL": "OGDC",
 }
 UNIVERSE = ["HBL", "HUBC", "OGDC", "UBL", "PPL", "PTCL", "SEARL", "LUCK", "SYS", "ENGROH"]
-PRICE_SOURCE = "PSX historical prices (FYP dataset, Adj. Close)"
+PRICE_SOURCE = (
+    "PSX historical prices (FYP dataset, Adj. Close) + PSX Data Portal daily market summary"
+)
 
 
 def price_path(symbol: str) -> Path | None:
@@ -63,12 +67,41 @@ def clean_prices(raw: pd.DataFrame) -> pd.DataFrame:
     return d.set_index("Date")[["Open", "High", "Low", "Close", "Volume", "no_trade"]]
 
 
-def load_stock(symbol: str) -> pd.DataFrame | None:
-    p = price_path(symbol)
-    if p is None:
+def _official_rows(symbol: str, after: pd.Timestamp | None) -> pd.DataFrame | None:
+    """Official PSX EOD rows (app.ingestion.psx_eod) after `after`, in the raw-file layout.
+
+    PSX closes are unadjusted; Adj. Close = Close for these rows. Where the xlsx history ends the
+    adjustment factor is 1 (its last Adj. Close equals its Close), so the series stays continuous.
+    """
+    from app.ingestion import psx_eod
+
+    canonical = {"LUCKY": "LUCK", "SYSTEMS": "SYS", "OGDCL": "OGDC"}.get(symbol.upper(), symbol)
+    e = psx_eod.load_symbol(canonical)
+    if e is None:
         return None
-    raw = pd.read_excel(p) if p.suffix == ".xlsx" else pd.read_csv(p)
-    return clean_prices(raw)
+    if after is not None:
+        e = e[e.index > after]
+    if e.empty:
+        return None
+    return pd.DataFrame({
+        "Date": e.index, "Open": e["open"].values, "High": e["high"].values,
+        "Low": e["low"].values, "Close": e["close"].values, "Adj. Close": e["close"].values,
+        "Volume": e["volume"].values,
+    })
+
+
+def load_stock(symbol: str) -> pd.DataFrame | None:
+    """FYP xlsx history, extended with official PSX daily prices after the file ends."""
+    p = price_path(symbol)
+    raw = None
+    if p is not None:
+        raw = pd.read_excel(p) if p.suffix == ".xlsx" else pd.read_csv(p)
+    after = pd.to_datetime(raw["Date"]).max() if raw is not None else None
+    extra = _official_rows(symbol, after)
+    if raw is None and extra is None:
+        return None
+    parts = [x for x in (raw, extra) if x is not None]
+    return clean_prices(pd.concat(parts, ignore_index=True) if len(parts) > 1 else parts[0])
 
 
 def load_benchmark() -> pd.Series | None:

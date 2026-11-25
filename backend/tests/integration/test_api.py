@@ -14,7 +14,11 @@ def test_tickers_lookup():
     assert client.get("/tickers/NOPE").status_code == 404
 
 
-def test_recommendation_degrades_gracefully_with_stub_agents():
+def test_recommendation_degrades_gracefully_with_stub_agents(tmp_path, monkeypatch):
+    # MEBL has no xlsx price file; hide any locally refreshed official PSX prices too.
+    from app.ingestion import psx_eod
+
+    monkeypatch.setattr(psx_eod, "EOD_CSV", tmp_path / "missing.csv")
     body = client.get("/recommendation/MEBL").json()
     assert body["call"] == "HOLD"
     assert len(body["agent_outputs"]) == 6
