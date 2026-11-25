@@ -64,7 +64,7 @@ regime-aware synthesis. LangGraph orchestration (`app/orchestration/`) is planne
 - `macro/`: built as a thin HTTP adapter. The real logic is the standalone `agents/macro/` package
   (repo root, its own pyproject/tests), served on `MACRO_AGENT_URL` (default `http://localhost:8010`).
   If that service is not running, the macro agent degrades instead of failing.
-- `fundamentals/`: being rebuilt from scratch on `feat/fundamentals-agent`. The target design is in
+- `fundamentals/`: being rebuilt from scratch on `aneeqa/fundamentals-agent`. The target design is in
   `docs/fundamentals_agent.md`. An earlier, unverified draft is kept for reference on the
   `wip/fundamentals-agent` branch (`git show wip/fundamentals-agent:<path>`). Do not merge that branch.
 - `fx/`, `forensics/`: stubs that raise `NotImplementedError`.
@@ -80,7 +80,8 @@ so the agents that read local files need the files copied in by hand.
 **Frontend** (Next.js 16 App Router, React 19, Tailwind 4):
 - `lib/useAgents.ts` fetches each agent independently; every card has its own loading, error and retry state.
 - `lib/api.ts` `fetchAgent()` decides, per agent, whether to call the live backend or `data/mock.ts`.
-  Technical and sentiment are live; the rest are mocked.
+  Technical, sentiment and macro are live (macro and sentiment are mocked when `NEXT_PUBLIC_USE_MOCK=true`);
+  the rest are mocked.
 - Each live agent needs an adapter that maps the backend `AgentOutput` to the UI `AgentOutput` in
   `lib/types.ts` (see `lib/technical-adapter.ts`).
 - `NEXT_PUBLIC_*` flags (`USE_MOCK`, `USE_MOCK_TECHNICAL`, `TECH_AS_OF`) are documented in
@@ -99,6 +100,10 @@ so the agents that read local files need the files copied in by hand.
   - Add a frontend adapter in `lib/api.ts`.
 - Git:
   - `main` is protected (PR + 1 approval + passing CI); `dev` is the integration branch.
-  - Branch names: `feat/<area>-<short>`, `fix/...`, `docs/...`.
+  - Branch names: README says `feat/<area>-<short>`, but in practice members prefix branches with their own
+    name (`aneeqa/...`, `fatima/...`, `mariam/...`).
+  - New branches must not track `origin/dev`, or a plain `git push` goes to `dev`. Push with
+    `git push -u origin <branch>`.
+  - `frontend/.venv/` is a stray local Python venv; run `npm run lint` on project dirs if it reports errors there.
   - Never commit `.env` or raw data.
 - Ruff: line length 100, target py311, rules E/F/I/UP.
