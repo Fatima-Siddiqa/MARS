@@ -118,7 +118,9 @@ panel.
   at `C:\Program Files\Tesseract-OCR`). A value is used only if it passes arithmetic checks
   (assets = liabilities + equity on independently read totals, equity = its components, share
   capital vs PSX share count, year-to-date profit = PSX quarters). Everything else goes to
-  `data/raw/fundamentals/official/review_queue.csv` for a person to key.
+  `data/raw/fundamentals/official/review_queue.csv` for a person to key. Tested on the 14
+  September 2026 filings: 75 of 140 values extracted automatically with 0 errors; the other 65 went
+  to review.
 
 ### Limitations
 

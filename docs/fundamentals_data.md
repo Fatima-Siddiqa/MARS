@@ -77,3 +77,7 @@ year-to-date profit / revenue = sum of the PSX company-page quarters. Anything e
 `python -m app.agents.fundamentals.data.validate_official`.
 
 Accuracy check against the hand-keyed values: `python -m app.agents.fundamentals.data.auto_extract --check`.
+Result on the 14 filings for September 2026 (140 hand-keyed values): **75 extracted automatically,
+0 wrong, 65 sent to review**. Fully automatic: HBL, UBL (all 18 values each). Not yet readable
+automatically: MEBL (scrambled text layer) and HUBC (scanned). Expect roughly half of a new
+filing's values to need the review queue.

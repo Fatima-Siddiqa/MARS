@@ -24,6 +24,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass, field
@@ -130,9 +131,51 @@ def ocr_page(pdf: Path, page: int, dpi: int = 300) -> str:
         ).stdout
 
 
+def ocr_header(pdf: Path, page: int) -> str:
+    """Fast OCR of the top of a page (100 dpi, cropped): enough to read a statement heading."""
+    tess = _tesseract()
+    if tess is None:
+        return ""
+    with tempfile.TemporaryDirectory() as d:
+        img = Path(d) / "h"
+        subprocess.run(
+            [
+                "pdftoppm",
+                "-r",
+                "100",
+                "-gray",
+                "-f",
+                str(page),
+                "-l",
+                str(page),
+                "-x",
+                "0",
+                "-y",
+                "0",
+                "-W",
+                "1000",
+                "-H",
+                "420",
+                "-singlefile",
+                "-png",
+                str(pdf),
+                str(img),
+            ],
+            capture_output=True,
+        )
+        return subprocess.run(
+            [tess, f"{img}.png", "-", "--psm", "6"], capture_output=True, text=True, errors="ignore"
+        ).stdout
+
+
+HEADINGS = r"statement of financial position|balance sheet|profit (and|or) loss"
+MAX_FULL_OCR = 8
+
+
 def page_texts(pdf: Path, ocr: bool = True) -> tuple[list[str], set[int]]:
-    """Text of every page; pages without a text layer are OCR'd (200 dpi, enough to find the
-    statements; the chosen pages are re-read at 300 dpi). Returns the OCR'd page indexes."""
+    """Text of every page. Pages without a text layer get a fast header OCR; those whose header
+    names a statement (at most MAX_FULL_OCR) are then OCR'd in full at 300 dpi. Returns the
+    indexes of the fully OCR'd pages."""
     n = int(
         re.search(
             r"Pages:\s+(\d+)",
@@ -148,12 +191,19 @@ def page_texts(pdf: Path, ocr: bool = True) -> tuple[list[str], set[int]]:
         ).stdout
         for i in range(1, n + 1)
     ]
-    ocrd = set()
-    if ocr and _tesseract():
-        for i, t in enumerate(texts):
-            if len(t.strip()) < 300:
-                texts[i] = ocr_page(pdf, i + 1, dpi=200)
-                ocrd.add(i)
+    ocrd: set[int] = set()
+    if not (ocr and _tesseract()):
+        return texts, ocrd
+    short = [i for i, t in enumerate(texts) if len(t.strip()) < 300]
+    candidates = []
+    for i in short:
+        head = " ".join(ocr_header(pdf, i + 1).lower().split())
+        texts[i] = head
+        if re.search(HEADINGS, head) and "notes to" not in head:
+            candidates.append(i)
+    for i in candidates[:MAX_FULL_OCR]:
+        texts[i] = ocr_page(pdf, i + 1, dpi=300)
+        ocrd.add(i)
     return texts, ocrd
 
 
@@ -429,17 +479,24 @@ def extract_filing(
     can_ocr = ocr and _tesseract() is not None
     bs_i, pl_i = find_page(texts, "bs"), find_page(texts, "pl")
     if can_ocr and (bs_i is None or pl_i is None):
-        # Text layer present but unusable (labels and numbers scrambled): OCR the heading pages.
-        heads = r"statement of financial position|balance sheet|profit (and|or) loss"
-        for i, t in enumerate(texts):
-            if i not in ocrd and re.search(heads, " ".join(t.lower().split())):
-                texts[i] = ocr_page(pdf, i + 1, dpi=200)
-                ocrd.add(i)
+        # Text layer present but unusable (labels and numbers scrambled): OCR the few pages whose
+        # text names a statement and holds a table of numbers.
+        cands = [
+            i
+            for i, t in enumerate(texts)
+            if i not in ocrd
+            and re.search(HEADINGS, " ".join(t.lower().split()))
+            and len(re.findall(r"\d{1,3},\d{3}", t)) >= 12
+        ]
+        for i in cands[:6]:
+            texts[i] = ocr_page(pdf, i + 1, dpi=300)
+            ocrd.add(i)
         bs_i, pl_i = find_page(texts, "bs"), find_page(texts, "pl")
-    for i in {bs_i, pl_i} - {None}:  # re-read chosen pages (and neighbours) sharply
-        for j in (i - 1, i, i + 1):
-            if j in ocrd and 0 <= j < len(texts):
+    for i in {bs_i, pl_i} - {None}:  # a statement may continue on the next/previous page
+        for j in (i - 1, i + 1):
+            if 0 <= j < len(texts) and j not in ocrd and len(texts[j].strip()) < 600:
                 texts[j] = ocr_page(pdf, j + 1, dpi=300)
+                ocrd.add(j)
     ex.method = "ocr" if bs_i in ocrd else "pdf_text"
     src = "auto_ocr" if ex.method == "ocr" else "auto_text"
     if bs_i is None:
@@ -683,6 +740,7 @@ def accuracy_check(ocr: bool = True) -> dict:
             "wrong": wrong,
             "not_extracted": missing,
         }
+        print(t, result["companies"][t], file=sys.stderr, flush=True)
     return result
 
 
