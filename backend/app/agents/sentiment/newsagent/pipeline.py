@@ -99,7 +99,7 @@ def score_pending(conn, scorer, batch=256):
                     pn,
                     pu,
                     tone,
-                    polarity.confidence_from_probs(pu),
+                    polarity.confidence_from_probs(pp, pn, pu),
                     ",".join(tags),
                     adj,
                     polarity.clip(tone + adj),

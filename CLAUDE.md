@@ -73,6 +73,13 @@ regime-aware synthesis. LangGraph orchestration (`app/orchestration/`) is planne
   self-contained package (RSS/PSX ingestion, entity linking, dedup, FinBERT scoring, aggregation
   engine). The API request only *reads* pre-scored articles from SQLite `sentiment/data/news.db`
   (`MARS_SENTIMENT_DB_PATH`); it never loads FinBERT. Scoring happens offline via `newsagent/pipeline.py`.
+  Scoring uses FinBERT with the fine-tuned PSX LoRA adapter merged in (`newsagent/polarity.py`; adapter
+  committed at `newsagent/training/runs/ft1/adapter`, test macro-F1 0.79 vs 0.67 base; override with
+  `FINBERT_ADAPTER`); scores are labelled `ProsusAI/finbert+lora@T=1.0` and the agent warns if any
+  article in the window was scored without LoRA. Confidence = relevance-weighted mean FinBERT top-class
+  probability (shown as "Confidence" like other agents); coverage is `metrics["quality"]`. Locally the
+  LoRA-scored, refreshed DB lives at `newsagent/data/news.db` (git-ignored) and `.env` points
+  `MARS_SENTIMENT_DB_PATH` to it; the tracked `sentiment/data/news.db` is the older shared copy.
 - `macro/`: built as a thin HTTP adapter. The real logic is the standalone `agents/macro/` package
   (repo root, its own pyproject/tests), served on `MACRO_AGENT_URL` (default `http://localhost:8010`).
   If that service is not running, the macro agent degrades instead of failing.

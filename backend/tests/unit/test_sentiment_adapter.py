@@ -21,7 +21,13 @@ def test_sentiment_output_maps_to_shared_contract():
                     "tone": -0.3,
                 }
             ],
-            "context": {"articles_in_window": 4, "effective_articles": 3.5, "window_days": 14},
+            "context": {
+                "articles_in_window": 4,
+                "effective_articles": 3.5,
+                "window_days": 14,
+                "model_confidence": 0.81,
+                "scored_with": ["ProsusAI/finbert+lora@T=1.0"],
+            },
             "flags": [],
             "scorer": ["finbert"],
             "model_version": "sentiment-news-1.0",
@@ -31,7 +37,8 @@ def test_sentiment_output_maps_to_shared_contract():
     assert out.agent.value == "sentiment"
     assert out.stance == Stance.BEARISH
     assert out.score == -0.55
-    assert out.confidence == 0.42
+    assert out.confidence == 0.81  # FinBERT (LoRA) model confidence, not data coverage
+    assert not any("LoRA" in w for w in out.warnings)
     assert out.status == AgentStatus.OK
     assert out.evidence[0].source_name == "Dawn"
     assert out.evidence[0].source_url == "https://example.com"
@@ -55,4 +62,24 @@ def test_low_quality_marks_output_degraded():
         "HUBC",
     )
     assert out.status == AgentStatus.DEGRADED
-    assert any("Low sentiment data quality" in warning for warning in out.warnings)
+    assert any("interpret the score cautiously" in warning for warning in out.warnings)
+
+
+def test_scores_without_lora_adapter_are_flagged():
+    out = _map_output(
+        {
+            "ticker": "HBL",
+            "as_of": "2026-11-26",
+            "score": 0.1,
+            "state": "Neutral",
+            "quality": 0.6,
+            "context": {"articles_in_window": 5, "window_days": 14, "model_confidence": 0.7,
+                        "scored_with": ["ProsusAI/finbert@T=1.0"]},
+            "flags": [],
+            "scorer": ["finbert"],
+            "evidence": [],
+            "drivers": [],
+        },
+        "HBL",
+    )
+    assert any("LoRA" in w for w in out.warnings) and any("LoRA" in r for r in out.risks)

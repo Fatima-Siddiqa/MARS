@@ -40,7 +40,7 @@ class Engine:
             """
             SELECT a.id, a.effective_at, a.cluster_id, a.headline, a.outlet, a.url, a.doc_url,
                    a.kind, a.published_at, e.entity_type, e.entity_id, e.relevance,
-                   s.tone_adj, s.p_neg, s.event_tags, s.scorer
+                   s.tone_adj, s.p_pos, s.p_neg, s.p_neu, s.event_tags, s.scorer, s.model_version
             FROM articles a
             JOIN article_entities e ON e.article_id = a.id
             JOIN article_scores s ON s.article_id = a.id
@@ -67,7 +67,10 @@ class Engine:
                     "cred": cred,
                     "rel": r["relevance"],
                     "tone": r["tone_adj"],
+                    "p_pos": r["p_pos"],
                     "p_neg": r["p_neg"],
+                    "p_neu": r["p_neu"],
+                    "model_version": r["model_version"],
                     "title": r["headline"],
                     "outlet": r["outlet"],
                     "url": r["url"],
@@ -377,6 +380,12 @@ class Engine:
                 }
             )
         outlets = sorted({r["outlet"] for r in window if r["outlet"]})
+        # Model confidence: relevance-weighted mean of FinBERT's top-class probability.
+        probs = [(r["rel"], max(r["p_pos"] or 0.0, r["p_neg"] or 0.0, r["p_neu"] or 0.0))
+                 for r in window if r["p_pos"] is not None]
+        wsum = sum(w for w, _ in probs)
+        model_conf = sum(w * c for w, c in probs) / wsum if wsum > 0 else None
+        scored_with = sorted({r["model_version"] for r in window if r.get("model_version")})
         return {
             "agent": config.AGENT_NAME,
             "ticker": ticker,
@@ -388,6 +397,8 @@ class Engine:
             "drivers": drivers,
             "evidence": evidence,
             "context": {
+                "model_confidence": None if model_conf is None else round(model_conf, 3),
+                "scored_with": scored_with,
                 "articles_in_window": srow["n_articles"] if srow else 0,
                 "effective_articles": round(srow["n_eff"], 2) if srow else 0.0,
                 "window_days": p.window_days,

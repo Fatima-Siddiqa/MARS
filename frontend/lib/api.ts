@@ -59,11 +59,12 @@ function toIndicators(raw: BackendAgentOutput): Indicator[] {
   const m = raw.metrics ?? {};
   const items: Array<[string, unknown]> = [
     ["Score", raw.score.toFixed(4)],
-    ["Data quality", `${Math.round(raw.confidence * 100)}%`],
+    ["Confidence", `${Math.round(raw.confidence * 100)}%`],
     ["Articles in window", m.articles_in_window],
     ["Effective articles", m.effective_articles],
     ["Window", typeof m.window_days === "number" ? `${m.window_days} days` : undefined],
     ["Model", m.model_version],
+    ["Scored by", Array.isArray(m.scored_with) ? m.scored_with.join(", ").replace("ProsusAI/finbert+lora@T=1.0", "FinBERT + LoRA (fine-tuned, ft1)") : undefined],
     ["Parent", m.parent],
   ];
   return items
@@ -80,8 +81,7 @@ function adaptSentiment(raw: BackendAgentOutput): AgentOutput {
     ticker: raw.ticker,
     signal: raw.stance,
     score: raw.score,
-    // For sentiment, this shared UI field carries the MARS quality index, not
-    // a calibrated probability. The UI labels it "Data quality" for this agent.
+    // FinBERT (LoRA fine-tuned) model confidence, shown as "Confidence" like the other agents.
     confidence: raw.confidence,
     summary: raw.summary ?? "No sentiment summary returned.",
     rationale: (raw.key_findings ?? []).join(" ") || raw.summary || "No additional rationale returned.",

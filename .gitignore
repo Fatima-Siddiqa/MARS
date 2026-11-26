@@ -47,3 +47,16 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Sentiment: local news databases and backups (the shared DB is sentiment/data/news.db)
+backend/app/agents/sentiment/newsagent/data/**/*.db
+backend/app/agents/sentiment/newsagent/data/snapshots/
+
+# Sentiment: private labelled training data
+backend/app/agents/sentiment/newsagent/training/data/
+
+# Sentiment: experimental adapters; keep the FT1 LoRA adapter used in production
+backend/app/agents/sentiment/newsagent/training/runs/*/adapter/
+!backend/app/agents/sentiment/newsagent/training/runs/ft1/
+!backend/app/agents/sentiment/newsagent/training/runs/ft1/adapter/
+!backend/app/agents/sentiment/newsagent/training/runs/ft1/adapter/**

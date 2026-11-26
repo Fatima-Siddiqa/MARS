@@ -49,7 +49,11 @@ def _map_output(raw: dict, requested_ticker: str) -> AgentOutput:
     if any(s != "finbert" for s in scorers):
         warnings.append(f"Non-FinBERT scorer reported: {', '.join(scorers)}")
     if quality < 0.30:
-        warnings.append("Low sentiment data quality; interpret the score cautiously.")
+        warnings.append("Few or weakly relevant articles; interpret the score cautiously.")
+    scored_with = list(context.get("scored_with") or [])
+    if scored_with and not all("+lora" in v for v in scored_with):
+        warnings.append("Some articles were not scored by the fine-tuned LoRA FinBERT: "
+                        + ", ".join(scored_with))
     n_articles = int(context.get("articles_in_window") or 0)
     window_days = int(context.get("window_days") or config.DEFAULT_PARAMS.window_days)
     score = float(raw.get("score") or 0.0)
@@ -117,6 +121,8 @@ def _map_output(raw: dict, requested_ticker: str) -> AgentOutput:
         "parent": context.get("parent"),
         "parent_score": context.get("parent_score"),
         "model_version": raw.get("model_version"),
+        "scored_with": scored_with,
+        "model_confidence": context.get("model_confidence"),
         "scorer": scorers,
         "drivers": raw.get("drivers") or [],
         "flags": flags,
@@ -130,12 +136,13 @@ def _map_output(raw: dict, requested_ticker: str) -> AgentOutput:
         status=status,
         stance=stance,
         score=max(-1.0, min(1.0, score)),
-        # The shared UI has one reliability field. For sentiment this is the
-        # uncalibrated MARS quality index, shown in the UI as "Data quality".
-        confidence=max(0.0, min(1.0, quality)),
+        # Mean top-class probability of the (LoRA fine-tuned) FinBERT scores in the window,
+        # uncalibrated, like the other agents' confidence. Coverage is metrics["quality"].
+        confidence=max(0.0, min(1.0, float(context.get("model_confidence") or 0.0))),
         summary=summary,
         key_findings=findings,
-        risks=[w for w in warnings if "Low sentiment data quality" in w or "Non-FinBERT" in w],
+        risks=[w for w in warnings if "interpret the score cautiously" in w or "Non-FinBERT" in w
+               or "LoRA" in w],
         evidence=evidence,
         metrics=metrics,
         warnings=warnings,

@@ -1,12 +1,21 @@
 """Article polarity. FinBERT inference only (no training): three softmax
-probabilities per headline. tone = P(pos) - P(neg); confidence = 1 - P(neu).
+probabilities per headline. tone = P(pos) - P(neg); confidence = max(P(pos), P(neg), P(neu)).
+
+The fine-tuned PSX LoRA adapter (training/runs/ft1/adapter, test macro-F1 0.79 vs 0.67 for
+base FinBERT) is merged into FinBERT when available: FINBERT_ADAPTER, else the committed ft1.
 
 A tiny lexicon scorer exists ONLY so the pipeline and tests run on machines
 without torch/transformers. Its output is tagged scorer='lexicon-fallback' and
 the pipeline refuses to use it unless --allow-fallback is passed."""
+import logging
+import os
 import re
+from pathlib import Path
 
 from app.agents.sentiment.newsagent import config
+
+log = logging.getLogger(__name__)
+DEFAULT_ADAPTER = Path(__file__).resolve().parent / "training" / "runs" / "ft1" / "adapter"
 
 
 class FinBertScorer:
@@ -26,6 +35,20 @@ class FinBertScorer:
         self.batch_size = batch_size
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
+        adapter = os.getenv("FINBERT_ADAPTER")
+        if not adapter or not Path(adapter).exists():
+            adapter = str(DEFAULT_ADAPTER) if DEFAULT_ADAPTER.exists() else None
+        if adapter:
+            try:
+                from peft import PeftModel
+
+                self.model = PeftModel.from_pretrained(self.model, adapter).merge_and_unload()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Fine-tuned adapter not usable (%s); using original FinBERT.", exc)
+                adapter = None
+        else:
+            log.warning("No fine-tuned LoRA adapter found; using original FinBERT.")
+        self.adapter = adapter
         self.model.eval()
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
@@ -38,8 +61,8 @@ class FinBertScorer:
                 raise RuntimeError(
                     f"Unexpected FinBERT labels: {id2label}"
                 )
-        self.version = f"{self.model_name}@T={self.temperature}"
-        self.version = f"{self.model_name}@T={self.temperature}"
+        self.version = (f"{self.model_name}+lora@T={self.temperature}" if adapter
+                        else f"{self.model_name}@T={self.temperature}")
 
     def score(self, texts):
         torch = self._torch
@@ -115,8 +138,8 @@ def tone_from_probs(p_pos, p_neg):
     return float(p_pos - p_neg)
 
 
-def confidence_from_probs(p_neu):
-    return float(1.0 - p_neu)
+def confidence_from_probs(p_pos, p_neg, p_neu):
+    return float(max(p_pos, p_neg, p_neu))
 
 
 def clip(x, lo=-1.0, hi=1.0):
